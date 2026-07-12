@@ -1,0 +1,292 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  align-items: center;
+  padding: 32px 20px 48px;
+  gap: 24px;
+}
+
+header {
+  text-align: center;
+  width: 100%;
+}
+
+header h1 {
+  margin: 0 0 8px;
+}
+
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  position: relative;
+}
+
+.theme-toggle {
+  position: absolute;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  color: var(--text-h);
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent-border);
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.status {
+  margin: 0;
+  font-size: 15px;
+}
+
+.status-ok {
+  color: var(--accent);
+}
+
+.status-warn {
+  color: #d97706;
+}
+
+.status-error {
+  color: #dc2626;
+}
+
+.circle-of-fifths {
+  overflow: visible;
+}
+
+.wedge {
+  fill: var(--code-bg);
+  stroke: var(--bg);
+  stroke-width: 1.5;
+  cursor: pointer;
+  transition: fill 0.15s;
+}
+
+.wedge:hover {
+  fill: var(--accent-bg);
+}
+
+.wedge-selected {
+  fill: var(--accent);
+}
+
+.wedge-label {
+  font-size: 13px;
+  fill: var(--text-h);
+  cursor: pointer;
+  user-select: none;
+}
+
+.wedge-label-selected {
+  fill: #fff;
+  font-weight: 600;
+}
+
+.wedge-label-pair {
+  font-size: 12px;
+}
+
+.circle-center {
+  fill: var(--bg);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.circle-center-label {
+  font-size: 16px;
+  font-weight: 600;
+  fill: var(--text-h);
+}
+
+.circle-center-sublabel {
+  font-size: 12px;
+  fill: var(--text);
+}
+
+.clef-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.staff-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
+
+.staff-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.clef-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.clef-select select {
+  font: inherit;
+  color: var(--text-h);
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.staff-view {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.staff-view svg {
+  display: block;
+}
+
+.note-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  min-height: 40px;
+}
+
+.note-info.empty {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.note-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 16px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--accent-bg);
+  color: var(--text-h);
+  border: 1px solid var(--accent-border);
+}
+
+.note-pill-role {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.chord-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 120px;
+  overflow: hidden;
+}
+
+.chord-info.placeholder {
+  color: var(--text);
+}
+
+.chord-symbol {
+  font-size: 40px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.chord-alternates {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.chord-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.chord-role-chip {
+  font-size: 12px;
+  font-family: var(--mono);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.piano-keyboard-wrapper {
+  max-width: 100%;
+  overflow-x: auto;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.piano-keyboard {
+  position: relative;
+}
+
+.piano-key {
+  position: absolute;
+  top: 0;
+  box-sizing: border-box;
+}
+
+.piano-key-white {
+  background: #fff;
+  border: 1px solid #999;
+  border-radius: 0 0 3px 3px;
+  z-index: 1;
+}
+
+.piano-key-black {
+  background: #222;
+  border: 1px solid #000;
+  border-radius: 0 0 2px 2px;
+  z-index: 2;
+}
+
+.piano-key-white.piano-key-active {
+  border-color: #b3160c;
+}
+
+.piano-key-role-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  border-radius: 0 0 2px 2px;
+}
