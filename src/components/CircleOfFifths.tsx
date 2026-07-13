@@ -6,9 +6,6 @@ interface CircleOfFifthsProps {
   onChange: (key: KeyOption) => void
 }
 
-// Clockwise from 12 o'clock: C, then ascending fifths (sharps) on one side
-// and ascending fourths (flats) on the other, meeting at the enharmonic
-// pairs (B/Cb, F#/Gb, C#/Db) opposite C.
 const SLOTS: (string | [string, string])[] = [
   'C',
   'G',
@@ -24,42 +21,49 @@ const SLOTS: (string | [string, string])[] = [
   'F',
 ]
 
+function relativeMinor(majorSpec: string): string {
+  const opt = KEY_OPTIONS.find((k) => k.spec === majorSpec)
+  if (!opt) return ''
+  return opt.label.split(' / ')[1]
+}
+
 interface Wedge {
-  specs: string[]
+  majorSpecs: string[]
+  minorSpecs: string[]
   start: number
   end: number
 }
 
 const WEDGES: Wedge[] = SLOTS.map((slot, i) => {
   const base = i * 30
-  return {
-    specs: Array.isArray(slot) ? slot : [slot],
-    start: base - 15,
-    end: base + 15,
-  }
+  const majorSpecs = Array.isArray(slot) ? slot : [slot]
+  const minorSpecs = majorSpecs.map(relativeMinor)
+  return { majorSpecs, minorSpecs, start: base - 15, end: base + 15 }
 })
 
 const CX = 100
 const CY = 100
 const OUTER_R = 92
-const INNER_R = 42
-const LABEL_R = 68
+const MAJOR_INNER_R = 55
+const MINOR_INNER_R = 36
+const MAJOR_LABEL_R = 73
+const MINOR_LABEL_R = 46
 
 function polar(r: number, deg: number) {
   const rad = ((deg - 90) * Math.PI) / 180
   return { x: CX + r * Math.cos(rad), y: CY + r * Math.sin(rad) }
 }
 
-function wedgePath(start: number, end: number): string {
-  const outerStart = polar(OUTER_R, start)
-  const outerEnd = polar(OUTER_R, end)
-  const innerEnd = polar(INNER_R, end)
-  const innerStart = polar(INNER_R, start)
+function wedgePath(outerR: number, innerR: number, start: number, end: number): string {
+  const outerStart = polar(outerR, start)
+  const outerEnd = polar(outerR, end)
+  const innerEnd = polar(innerR, end)
+  const innerStart = polar(innerR, start)
   return [
     `M ${outerStart.x} ${outerStart.y}`,
-    `A ${OUTER_R} ${OUTER_R} 0 0 1 ${outerEnd.x} ${outerEnd.y}`,
+    `A ${outerR} ${outerR} 0 0 1 ${outerEnd.x} ${outerEnd.y}`,
     `L ${innerEnd.x} ${innerEnd.y}`,
-    `A ${INNER_R} ${INNER_R} 0 0 0 ${innerStart.x} ${innerStart.y}`,
+    `A ${innerR} ${innerR} 0 0 0 ${innerStart.x} ${innerStart.y}`,
     'Z',
   ].join(' ')
 }
@@ -72,10 +76,10 @@ function prettify(raw: string): string {
   return `${letter}${symbol}${minor}`
 }
 
-function nextSpec(wedge: Wedge, currentSpec: string): string {
-  const index = wedge.specs.indexOf(currentSpec)
-  if (index === -1) return wedge.specs[0]
-  return wedge.specs[(index + 1) % wedge.specs.length]
+function nextSpec(specs: string[], currentSpec: string): string {
+  const index = specs.indexOf(currentSpec)
+  if (index === -1) return specs[0]
+  return specs[(index + 1) % specs.length]
 }
 
 export function CircleOfFifths({ value, onChange }: CircleOfFifthsProps) {
@@ -89,26 +93,36 @@ export function CircleOfFifths({ value, onChange }: CircleOfFifthsProps) {
       aria-label="Circle of fifths key selector"
     >
       {WEDGES.map((wedge) => {
-        const selected = wedge.specs.includes(value.spec)
-        const spec = selected ? value.spec : wedge.specs[0]
-        const key = KEY_OPTIONS.find((k) => k.spec === spec)
+        const selected = wedge.majorSpecs.includes(value.spec)
+        const activeSpec = selected ? value.spec : wedge.majorSpecs[0]
+        const key = KEY_OPTIONS.find((k) => k.spec === activeSpec)
         if (!key) return null
+
         const mid = (wedge.start + wedge.end) / 2
-        const labelPos = polar(LABEL_R, mid)
+        const majorLabelPos = polar(MAJOR_LABEL_R, mid)
+        const minorLabelPos = polar(MINOR_LABEL_R, mid)
+
         const handleClick = () => {
-          const target = selected ? nextSpec(wedge, value.spec) : wedge.specs[0]
+          const target = selected
+            ? nextSpec(wedge.majorSpecs, value.spec)
+            : wedge.majorSpecs[0]
           const next = KEY_OPTIONS.find((k) => k.spec === target)
           if (next) onChange(next)
         }
+
+        const activeMinorIndex = wedge.majorSpecs.indexOf(activeSpec)
+        const activeMinorSpec = wedge.minorSpecs[activeMinorIndex] || wedge.minorSpecs[0]
+
         return (
-          <g key={wedge.specs.join('/')}>
+          <g key={wedge.majorSpecs.join('/')}>
+            {/* Major (outer) ring */}
             <path
               className={selected ? 'wedge wedge-selected' : 'wedge'}
-              d={wedgePath(wedge.start, wedge.end)}
+              d={wedgePath(OUTER_R, MAJOR_INNER_R, wedge.start, wedge.end)}
               onClick={handleClick}
             >
               <title>
-                {wedge.specs
+                {wedge.majorSpecs
                   .map((s) => KEY_OPTIONS.find((k) => k.spec === s)?.label)
                   .join(' / ')}
               </title>
@@ -116,31 +130,56 @@ export function CircleOfFifths({ value, onChange }: CircleOfFifthsProps) {
             <text
               className={[
                 'wedge-label',
-                wedge.specs.length > 1 && 'wedge-label-pair',
+                wedge.majorSpecs.length > 1 && 'wedge-label-pair',
                 selected && 'wedge-label-selected',
               ]
                 .filter(Boolean)
                 .join(' ')}
-              x={labelPos.x}
-              y={labelPos.y}
+              x={majorLabelPos.x}
+              y={majorLabelPos.y}
               textAnchor="middle"
               dominantBaseline="middle"
               onClick={handleClick}
             >
-              {wedge.specs.length > 1 ? (
-                wedge.specs.map((s, i) => (
-                  <tspan key={s} x={labelPos.x} dy={i === 0 ? '-0.55em' : '1.1em'}>
+              {wedge.majorSpecs.length > 1 ? (
+                wedge.majorSpecs.map((s, i) => (
+                  <tspan key={s} x={majorLabelPos.x} dy={i === 0 ? '-0.55em' : '1.1em'}>
                     {prettify(s)}
                   </tspan>
                 ))
               ) : (
-                prettify(wedge.specs[0])
+                prettify(wedge.majorSpecs[0])
               )}
+            </text>
+
+            {/* Minor (inner) ring */}
+            <path
+              className={
+                selected ? 'wedge wedge-minor wedge-selected' : 'wedge wedge-minor'
+              }
+              d={wedgePath(MAJOR_INNER_R, MINOR_INNER_R, wedge.start, wedge.end)}
+              onClick={handleClick}
+            />
+            <text
+              className={[
+                'wedge-label wedge-label-minor',
+                selected && 'wedge-label-selected',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              x={minorLabelPos.x}
+              y={minorLabelPos.y}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              onClick={handleClick}
+            >
+              {prettify(activeMinorSpec)}
             </text>
           </g>
         )
       })}
-      <circle className="circle-center" cx={CX} cy={CY} r={INNER_R - 2} />
+
+      <circle className="circle-center" cx={CX} cy={CY} r={MINOR_INNER_R - 2} />
       <text
         className="circle-center-label"
         x={CX}
@@ -152,7 +191,7 @@ export function CircleOfFifths({ value, onChange }: CircleOfFifthsProps) {
       <text
         className="circle-center-sublabel"
         x={CX}
-        y={CY + 12}
+        y={CY + 10}
         textAnchor="middle"
       >
         {prettify(value.label.split(' / ')[1])}

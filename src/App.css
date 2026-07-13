@@ -90,7 +90,7 @@ main {
 }
 
 .wedge-label {
-  font-size: 13px;
+  font-size: 12px;
   fill: var(--text-h);
   cursor: pointer;
   user-select: none;
@@ -102,7 +102,17 @@ main {
 }
 
 .wedge-label-pair {
-  font-size: 12px;
+  font-size: 10px;
+}
+
+.wedge-label-minor {
+  font-size: 8px;
+  font-style: italic;
+}
+
+.wedge-minor {
+  fill: var(--accent-bg);
+  opacity: 0.75;
 }
 
 .circle-center {
@@ -112,13 +122,13 @@ main {
 }
 
 .circle-center-label {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   fill: var(--text-h);
 }
 
 .circle-center-sublabel {
-  font-size: 12px;
+  font-size: 10px;
   fill: var(--text);
 }
 
