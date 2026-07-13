@@ -328,8 +328,9 @@ main {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 28px;
-  flex-wrap: wrap;
+  height: 36px;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .scale-info-label {
