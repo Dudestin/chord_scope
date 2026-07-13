@@ -1,4 +1,4 @@
-import { Chord, Midi } from 'tonal'
+import { Chord, Midi, Progression } from 'tonal'
 
 export interface NoteInfo {
   midi: number
@@ -30,4 +30,12 @@ export function detectChord(
 
   const [symbol, ...alternates] = candidates
   return { symbol, alternates }
+}
+
+export function detectRomanNumeral(
+  chordSymbol: string,
+  tonic: string,
+): string | null {
+  const result = Progression.toRomanNumerals(tonic, [chordSymbol])
+  return result[0] ?? null
 }

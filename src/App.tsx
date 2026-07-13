@@ -7,7 +7,7 @@ import { PianoKeyboard } from './components/PianoKeyboard'
 import { StaffView } from './components/StaffView'
 import type { ClefName } from './components/StaffView'
 import { useMidi } from './midi/useMidi'
-import { analyzeNotes, detectChord } from './theory/analyze'
+import { analyzeNotes, detectChord, detectRomanNumeral } from './theory/analyze'
 import type { MidiStatus } from './midi/useMidi'
 import { KEY_OPTIONS } from './theory/keys'
 import type { KeyOption } from './theory/keys'
@@ -133,6 +133,7 @@ function App() {
   const [topClef, setTopClef] = useState<ClefName>('treble')
   const [bottomClef, setBottomClef] = useState<ClefName>('bass')
   const [key, setKey] = useState<KeyOption>(KEY_OPTIONS[7])
+  const [mode, setMode] = useState<'major' | 'minor'>('major')
   const [theme, setTheme] = useState<Theme>(() =>
     window.matchMedia('(prefers-color-scheme: dark)').matches
       ? 'dark'
@@ -158,6 +159,16 @@ function App() {
         : new Map(),
     [activeNotes, chord],
   )
+  const romanNumeral = useMemo(
+    () =>
+      chord
+        ? detectRomanNumeral(
+            chord.symbol,
+            mode === 'minor' ? key.minorTonic : key.spec,
+          )
+        : null,
+    [chord, key, mode],
+  )
 
   return (
     <div className="app">
@@ -177,7 +188,14 @@ function App() {
       <main>
         <div className="staff-row">
           <div className="staff-controls">
-            <CircleOfFifths value={key} onChange={setKey} />
+            <CircleOfFifths
+              value={key}
+              mode={mode}
+              onChange={(newKey, newMode) => {
+                setKey(newKey)
+                setMode(newMode)
+              }}
+            />
             <div className="clef-controls">
               <ClefSelect
                 label="Upper staff (RH)"
@@ -205,6 +223,7 @@ function App() {
           notes={notes}
           noteCount={notes.length}
           roles={roles}
+          romanNumeral={romanNumeral}
         />
         <PianoKeyboard activeNotes={activeNotes} roles={roles} />
       </main>

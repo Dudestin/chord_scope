@@ -3,7 +3,8 @@ import type { KeyOption } from '../theory/keys'
 
 interface CircleOfFifthsProps {
   value: KeyOption
-  onChange: (key: KeyOption) => void
+  mode: 'major' | 'minor'
+  onChange: (key: KeyOption, mode: 'major' | 'minor') => void
 }
 
 const SLOTS: (string | [string, string])[] = [
@@ -44,10 +45,10 @@ const WEDGES: Wedge[] = SLOTS.map((slot, i) => {
 const CX = 100
 const CY = 100
 const OUTER_R = 92
-const MAJOR_INNER_R = 55
+const MAJOR_INNER_R = 63
 const MINOR_INNER_R = 36
-const MAJOR_LABEL_R = 73
-const MINOR_LABEL_R = 46
+const MAJOR_LABEL_R = 77
+const MINOR_LABEL_R = 50
 
 function polar(r: number, deg: number) {
   const rad = ((deg - 90) * Math.PI) / 180
@@ -82,7 +83,7 @@ function nextSpec(specs: string[], currentSpec: string): string {
   return specs[(index + 1) % specs.length]
 }
 
-export function CircleOfFifths({ value, onChange }: CircleOfFifthsProps) {
+export function CircleOfFifths({ value, mode, onChange }: CircleOfFifthsProps) {
   return (
     <svg
       className="circle-of-fifths"
@@ -102,24 +103,41 @@ export function CircleOfFifths({ value, onChange }: CircleOfFifthsProps) {
         const majorLabelPos = polar(MAJOR_LABEL_R, mid)
         const minorLabelPos = polar(MINOR_LABEL_R, mid)
 
-        const handleClick = () => {
-          const target = selected
-            ? nextSpec(wedge.majorSpecs, value.spec)
-            : wedge.majorSpecs[0]
+        const handleMajorClick = () => {
+          // cycle enharmonic only when already selected in major mode
+          const target =
+            selected && mode === 'major'
+              ? nextSpec(wedge.majorSpecs, value.spec)
+              : selected
+                ? value.spec
+                : wedge.majorSpecs[0]
           const next = KEY_OPTIONS.find((k) => k.spec === target)
-          if (next) onChange(next)
+          if (next) onChange(next, 'major')
         }
 
-        const activeMinorIndex = wedge.majorSpecs.indexOf(activeSpec)
-        const activeMinorSpec = wedge.minorSpecs[activeMinorIndex] || wedge.minorSpecs[0]
+        const handleMinorClick = () => {
+          // cycle enharmonic only when already selected in minor mode
+          const target =
+            selected && mode === 'minor'
+              ? nextSpec(wedge.majorSpecs, value.spec)
+              : selected
+                ? value.spec
+                : wedge.majorSpecs[0]
+          const next = KEY_OPTIONS.find((k) => k.spec === target)
+          if (next) onChange(next, 'minor')
+        }
+
+
 
         return (
           <g key={wedge.majorSpecs.join('/')}>
             {/* Major (outer) ring */}
             <path
-              className={selected ? 'wedge wedge-selected' : 'wedge'}
+              className={
+                selected && mode === 'major' ? 'wedge wedge-selected' : 'wedge'
+              }
               d={wedgePath(OUTER_R, MAJOR_INNER_R, wedge.start, wedge.end)}
-              onClick={handleClick}
+              onClick={handleMajorClick}
             >
               <title>
                 {wedge.majorSpecs
@@ -131,7 +149,7 @@ export function CircleOfFifths({ value, onChange }: CircleOfFifthsProps) {
               className={[
                 'wedge-label',
                 wedge.majorSpecs.length > 1 && 'wedge-label-pair',
-                selected && 'wedge-label-selected',
+                selected && mode === 'major' && 'wedge-label-selected',
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -139,7 +157,7 @@ export function CircleOfFifths({ value, onChange }: CircleOfFifthsProps) {
               y={majorLabelPos.y}
               textAnchor="middle"
               dominantBaseline="middle"
-              onClick={handleClick}
+              onClick={handleMajorClick}
             >
               {wedge.majorSpecs.length > 1 ? (
                 wedge.majorSpecs.map((s, i) => (
@@ -155,15 +173,17 @@ export function CircleOfFifths({ value, onChange }: CircleOfFifthsProps) {
             {/* Minor (inner) ring */}
             <path
               className={
-                selected ? 'wedge wedge-minor wedge-selected' : 'wedge wedge-minor'
+                selected && mode === 'minor'
+                  ? 'wedge wedge-minor wedge-selected'
+                  : 'wedge wedge-minor'
               }
               d={wedgePath(MAJOR_INNER_R, MINOR_INNER_R, wedge.start, wedge.end)}
-              onClick={handleClick}
+              onClick={handleMinorClick}
             />
             <text
               className={[
                 'wedge-label wedge-label-minor',
-                selected && 'wedge-label-selected',
+                selected && mode === 'minor' && 'wedge-label-selected',
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -171,9 +191,17 @@ export function CircleOfFifths({ value, onChange }: CircleOfFifthsProps) {
               y={minorLabelPos.y}
               textAnchor="middle"
               dominantBaseline="middle"
-              onClick={handleClick}
+              onClick={handleMinorClick}
             >
-              {prettify(activeMinorSpec)}
+              {wedge.minorSpecs.length > 1 ? (
+                wedge.minorSpecs.map((s, i) => (
+                  <tspan key={s} x={minorLabelPos.x} dy={i === 0 ? '-0.55em' : '1.1em'}>
+                    {prettify(s)}
+                  </tspan>
+                ))
+              ) : (
+                prettify(wedge.minorSpecs[0])
+              )}
             </text>
           </g>
         )
@@ -185,6 +213,7 @@ export function CircleOfFifths({ value, onChange }: CircleOfFifthsProps) {
         x={CX}
         y={CY - 6}
         textAnchor="middle"
+        opacity={mode === 'major' ? 1 : 0.35}
       >
         {prettify(value.label.split(' / ')[0])}
       </text>
@@ -193,6 +222,8 @@ export function CircleOfFifths({ value, onChange }: CircleOfFifthsProps) {
         x={CX}
         y={CY + 10}
         textAnchor="middle"
+        opacity={mode === 'minor' ? 1 : 0.35}
+        fontWeight={mode === 'minor' ? 600 : undefined}
       >
         {prettify(value.label.split(' / ')[1])}
       </text>

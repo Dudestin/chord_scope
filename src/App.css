@@ -115,6 +115,11 @@ main {
   opacity: 0.75;
 }
 
+.wedge-minor.wedge-selected {
+  fill: var(--accent);
+  opacity: 1;
+}
+
 .circle-center {
   fill: var(--bg);
   stroke: var(--border);
@@ -129,7 +134,7 @@ main {
 
 .circle-center-sublabel {
   font-size: 10px;
-  fill: var(--text);
+  fill: var(--text-h);
 }
 
 .clef-controls {
@@ -229,10 +234,23 @@ main {
   color: var(--text);
 }
 
+.chord-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
 .chord-symbol {
   font-size: 40px;
   font-weight: 600;
   color: var(--text-h);
+}
+
+.chord-roman-numeral {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--text);
+  font-family: var(--mono);
 }
 
 .chord-alternates {

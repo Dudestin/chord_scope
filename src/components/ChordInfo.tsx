@@ -6,9 +6,10 @@ interface ChordInfoProps {
   notes: NoteInfo[]
   noteCount: number
   roles: Map<number, ChordRole>
+  romanNumeral?: string | null
 }
 
-export function ChordInfo({ chord, notes, noteCount, roles }: ChordInfoProps) {
+export function ChordInfo({ chord, notes, noteCount, roles, romanNumeral }: ChordInfoProps) {
   if (noteCount < 3) {
     return <p className="chord-info placeholder">&nbsp;</p>
   }
@@ -19,7 +20,12 @@ export function ChordInfo({ chord, notes, noteCount, roles }: ChordInfoProps) {
 
   return (
     <div className="chord-info">
-      <span className="chord-symbol">{chord.symbol}</span>
+      <div className="chord-header">
+        <span className="chord-symbol">{chord.symbol}</span>
+        {romanNumeral && (
+          <span className="chord-roman-numeral">{romanNumeral}</span>
+        )}
+      </div>
       {chord.alternates.length > 0 && (
         <span className="chord-alternates">
           {chord.alternates.join(' / ')}
