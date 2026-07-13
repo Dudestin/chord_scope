@@ -1,6 +1,10 @@
 import type { NoteInfo as NoteInfoData } from '../theory/analyze'
 import type { ChordRole } from '../theory/roles'
 
+function prettifyNoteName(name: string): string {
+  return name.replace(/#/, '♯').replace(/([A-G])b/, '$1♭')
+}
+
 interface NoteInfoProps {
   notes: NoteInfoData[]
   roles: Map<number, ChordRole>
@@ -25,7 +29,7 @@ export function NoteInfo({ notes, roles }: NoteInfoProps) {
                 : undefined
             }
           >
-            {note.name}
+            {prettifyNoteName(note.name)}
             {role && <span className="note-pill-role">{role.label}</span>}
           </span>
         )
