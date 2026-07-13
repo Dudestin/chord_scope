@@ -5,10 +5,11 @@ import { CircleOfFifths } from './components/CircleOfFifths'
 import { NoteInfo } from './components/NoteInfo'
 import { PianoKeyboard } from './components/PianoKeyboard'
 import { TensionInfo } from './components/TensionInfo'
+import { ScaleInfo } from './components/ScaleInfo'
 import { StaffView } from './components/StaffView'
 import type { ClefName } from './components/StaffView'
 import { useMidi } from './midi/useMidi'
-import { analyzeNotes, computeTensions, detectChord, detectRomanNumeral } from './theory/analyze'
+import { analyzeNotes, computeTensions, detectChord, detectRomanNumeral, detectScales } from './theory/analyze'
 import type { MidiStatus } from './midi/useMidi'
 import { KEY_OPTIONS } from './theory/keys'
 import type { KeyOption } from './theory/keys'
@@ -170,6 +171,10 @@ function App() {
         : null,
     [chord, key, mode],
   )
+  const scales = useMemo(
+    () => detectScales(notes.map((n) => n.name)),
+    [notes],
+  )
   const tensionInfo = useMemo(
     () =>
       chord
@@ -238,6 +243,7 @@ function App() {
           romanNumeral={romanNumeral}
         />
         <TensionInfo tension={tensionInfo} />
+        <ScaleInfo scales={scales} />
         <PianoKeyboard
           activeNotes={activeNotes}
           roles={roles}

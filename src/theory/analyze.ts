@@ -1,4 +1,4 @@
-import { Chord, Key, Midi, Note, Progression } from 'tonal'
+import { Chord, Key, Midi, Note, Progression, Scale } from 'tonal'
 
 export interface NoteInfo {
   midi: number
@@ -69,6 +69,32 @@ export function computeTensions(
   }
 
   return { tensions, avoids }
+}
+
+const COMMON_SCALE_TYPES = new Set([
+  'major',
+  'minor',
+  'dorian',
+  'phrygian',
+  'lydian',
+  'mixolydian',
+  'locrian',
+  'major pentatonic',
+  'minor pentatonic',
+  'harmonic minor',
+  'melodic minor',
+  'blues',
+  'whole tone',
+  'diminished',
+  'augmented',
+])
+
+export function detectScales(noteNames: string[]): string[] {
+  if (noteNames.length < 2) return []
+  const pcs = noteNames.map((n) => n.replace(/\d+$/, ''))
+  return Scale.detect(pcs)
+    .filter((name) => COMMON_SCALE_TYPES.has(Scale.get(name).type))
+    .slice(0, 5)
 }
 
 export function detectRomanNumeral(
