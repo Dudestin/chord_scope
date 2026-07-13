@@ -26,28 +26,24 @@ export function ChordInfo({ chord, notes, noteCount, roles, romanNumeral }: Chor
           <span className="chord-roman-numeral">{romanNumeral}</span>
         )}
       </div>
-      {chord.alternates.length > 0 && (
-        <span className="chord-alternates">
-          {chord.alternates.join(' / ')}
-        </span>
-      )}
-      {roles.size > 0 && (
-        <div className="chord-roles">
-          {notes.map((note) => {
-            const role = roles.get(note.midi)
-            if (!role) return null
-            return (
-              <span
-                key={note.midi}
-                className="chord-role-chip"
-                style={{ background: role.color }}
-              >
-                {note.name} {role.label}
-              </span>
-            )
-          })}
-        </div>
-      )}
+      <span className="chord-alternates">
+        {chord.alternates.length > 0 ? chord.alternates.join(' / ') : ' '}
+      </span>
+      <div className="chord-roles">
+        {notes.map((note) => {
+          const role = roles.get(note.midi)
+          if (!role) return null
+          return (
+            <span
+              key={note.midi}
+              className="chord-role-chip"
+              style={{ background: role.color }}
+            >
+              {note.name} {role.label}
+            </span>
+          )
+        })}
+      </div>
     </div>
   )
 }

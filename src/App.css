@@ -263,6 +263,7 @@ main {
   flex-wrap: wrap;
   gap: 6px;
   justify-content: center;
+  min-height: 22px;
 }
 
 .chord-role-chip {
