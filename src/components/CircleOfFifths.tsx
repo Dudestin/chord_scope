@@ -103,8 +103,15 @@ export function CircleOfFifths({ value, mode, onChange }: CircleOfFifthsProps) {
         const majorLabelPos = polar(MAJOR_LABEL_R, mid)
         const minorLabelPos = polar(MINOR_LABEL_R, mid)
 
+        const isCSlot = wedge.majorSpecs.length === 1 && wedge.majorSpecs[0] === 'C'
+
         const handleMajorClick = () => {
-          // cycle enharmonic only when already selected in major mode
+          if (isCSlot && selected && mode === 'major') {
+            // C has no enharmonic key — toggle sharps display preference instead
+            const base = KEY_OPTIONS.find((k) => k.spec === 'C')!
+            onChange({ ...base, sharps: !value.sharps }, 'major')
+            return
+          }
           const target =
             selected && mode === 'major'
               ? nextSpec(wedge.majorSpecs, value.spec)
@@ -116,7 +123,11 @@ export function CircleOfFifths({ value, mode, onChange }: CircleOfFifthsProps) {
         }
 
         const handleMinorClick = () => {
-          // cycle enharmonic only when already selected in minor mode
+          if (isCSlot && selected && mode === 'minor') {
+            const base = KEY_OPTIONS.find((k) => k.spec === 'C')!
+            onChange({ ...base, sharps: !value.sharps }, 'minor')
+            return
+          }
           const target =
             selected && mode === 'minor'
               ? nextSpec(wedge.majorSpecs, value.spec)
@@ -148,7 +159,7 @@ export function CircleOfFifths({ value, mode, onChange }: CircleOfFifthsProps) {
             <text
               className={[
                 'wedge-label',
-                wedge.majorSpecs.length > 1 && 'wedge-label-pair',
+                (wedge.majorSpecs.length > 1 || (isCSlot && selected)) && 'wedge-label-pair',
                 selected && mode === 'major' && 'wedge-label-selected',
               ]
                 .filter(Boolean)
@@ -165,6 +176,11 @@ export function CircleOfFifths({ value, mode, onChange }: CircleOfFifthsProps) {
                     {prettify(s)}
                   </tspan>
                 ))
+              ) : isCSlot && selected ? (
+                <>
+                  <tspan x={majorLabelPos.x} dy="-0.4em">C</tspan>
+                  <tspan x={majorLabelPos.x} dy="1.0em">{value.sharps ? '(♯)' : '(♭)'}</tspan>
+                </>
               ) : (
                 prettify(wedge.majorSpecs[0])
               )}
@@ -199,6 +215,11 @@ export function CircleOfFifths({ value, mode, onChange }: CircleOfFifthsProps) {
                     {prettify(s)}
                   </tspan>
                 ))
+              ) : isCSlot && selected ? (
+                <>
+                  <tspan x={minorLabelPos.x} dy="-0.55em">{prettify(wedge.minorSpecs[0])}</tspan>
+                  <tspan x={minorLabelPos.x} dy="1.1em">{value.sharps ? '♯' : '♭'}</tspan>
+                </>
               ) : (
                 prettify(wedge.minorSpecs[0])
               )}
