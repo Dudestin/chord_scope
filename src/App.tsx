@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { ChordInfo } from './components/ChordInfo'
 import { CircleOfFifths } from './components/CircleOfFifths'
@@ -99,6 +99,17 @@ function ClefSelect({
   )
 }
 
+const MINOR_MODES = new Set<ModalMode>(['aeolian', 'dorian', 'phrygian', 'locrian'])
+
+function KeyboardHints() {
+  return (
+    <div className="kbd-hints">
+      <span className="kbd-hint"><kbd>[</kbd><kbd>]</kbd> cycle key</span>
+      <span className="kbd-hint"><kbd>m</kbd> major / minor</span>
+    </div>
+  )
+}
+
 const MODAL_MODE_LABELS: Record<ModalMode, string> = {
   ionian: 'Ionian (I)',
   dorian: 'Dorian (II)',
@@ -179,6 +190,38 @@ function App() {
     document.documentElement.dataset.theme = theme
   }, [theme])
 
+  const keyIndex = KEY_OPTIONS.indexOf(key)
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return
+      if (e.target instanceof HTMLSelectElement || e.target instanceof HTMLInputElement) return
+      if (e.key === ']') {
+        const next = KEY_OPTIONS[Math.min(keyIndex + 1, KEY_OPTIONS.length - 1)]
+        setKey(next)
+        setTonic(MINOR_MODES.has(mode) ? next.minorTonic : next.spec)
+      } else if (e.key === '[') {
+        const next = KEY_OPTIONS[Math.max(keyIndex - 1, 0)]
+        setKey(next)
+        setTonic(MINOR_MODES.has(mode) ? next.minorTonic : next.spec)
+      } else if (e.key === 'm' || e.key === 'M') {
+        if (MINOR_MODES.has(mode)) {
+          setMode('ionian')
+          setTonic(key.spec)
+        } else {
+          setMode('aeolian')
+          setTonic(key.minorTonic)
+        }
+      }
+    },
+    [key, mode, keyIndex],
+  )
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handleKeyDown])
+
   const notes = useMemo(
     () => analyzeNotes([...activeNotes.keys()], key.sharps),
     [activeNotes, key],
@@ -252,6 +295,7 @@ function App() {
                 value={bottomClef}
                 onChange={setBottomClef}
               />
+              <KeyboardHints />
             </div>
           </div>
           <StaffView
