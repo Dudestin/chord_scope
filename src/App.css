@@ -348,6 +348,12 @@ main {
   border: 1px solid var(--accent-border);
 }
 
+.scale-chip-active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
 .piano-keyboard-wrapper {
   max-width: 100%;
   overflow-x: auto;

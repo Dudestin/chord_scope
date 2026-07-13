@@ -1,4 +1,27 @@
-import { Chord, Key, Midi, Note, Progression, Scale } from 'tonal'
+import { Chord, Midi, Note, Progression, Scale } from 'tonal'
+
+export type ModalMode =
+  | 'ionian'
+  | 'dorian'
+  | 'phrygian'
+  | 'lydian'
+  | 'mixolydian'
+  | 'aeolian'
+  | 'locrian'
+
+const TONAL_SCALE_TYPE: Record<ModalMode, string> = {
+  ionian: 'major',
+  dorian: 'dorian',
+  phrygian: 'phrygian',
+  lydian: 'lydian',
+  mixolydian: 'mixolydian',
+  aeolian: 'minor',
+  locrian: 'locrian',
+}
+
+export function getScaleName(tonic: string, mode: ModalMode): string {
+  return `${tonic} ${TONAL_SCALE_TYPE[mode]}`
+}
 
 export interface NoteInfo {
   midi: number
@@ -39,13 +62,10 @@ export interface TensionResult {
 
 export function computeTensions(
   chordSymbol: string,
-  keyTonic: string,
-  mode: 'major' | 'minor',
+  tonic: string,
+  mode: ModalMode,
 ): TensionResult {
-  const scaleNotes: readonly string[] =
-    mode === 'minor'
-      ? Key.minorKey(keyTonic).natural.scale
-      : Key.majorKey(keyTonic).scale
+  const scaleNotes = Scale.get(getScaleName(tonic, mode)).notes
 
   const chord = Chord.get(chordSymbol)
   if (chord.empty) return { tensions: [], avoids: [] }

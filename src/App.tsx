@@ -9,7 +9,8 @@ import { ScaleInfo } from './components/ScaleInfo'
 import { StaffView } from './components/StaffView'
 import type { ClefName } from './components/StaffView'
 import { useMidi } from './midi/useMidi'
-import { analyzeNotes, computeTensions, detectChord, detectRomanNumeral, detectScales } from './theory/analyze'
+import { analyzeNotes, computeTensions, detectChord, detectRomanNumeral, detectScales, getScaleName } from './theory/analyze'
+import type { ModalMode } from './theory/analyze'
 import type { MidiStatus } from './midi/useMidi'
 import { KEY_OPTIONS } from './theory/keys'
 import type { KeyOption } from './theory/keys'
@@ -98,6 +99,37 @@ function ClefSelect({
   )
 }
 
+const MODAL_MODE_LABELS: Record<ModalMode, string> = {
+  ionian: 'Ionian (I)',
+  dorian: 'Dorian (II)',
+  phrygian: 'Phrygian (III)',
+  lydian: 'Lydian (IV)',
+  mixolydian: 'Mixolydian (V)',
+  aeolian: 'Aeolian (VI)',
+  locrian: 'Locrian (VII)',
+}
+
+function ModeSelect({
+  value,
+  onChange,
+}: {
+  value: ModalMode
+  onChange: (m: ModalMode) => void
+}) {
+  return (
+    <label className="clef-select">
+      Mode
+      <select value={value} onChange={(e) => onChange(e.target.value as ModalMode)}>
+        {(Object.keys(MODAL_MODE_LABELS) as ModalMode[]).map((m) => (
+          <option key={m} value={m}>
+            {MODAL_MODE_LABELS[m]}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
 function StatusBanner({ status }: { status: MidiStatus }) {
   switch (status.kind) {
     case 'unsupported':
@@ -135,7 +167,8 @@ function App() {
   const [topClef, setTopClef] = useState<ClefName>('treble')
   const [bottomClef, setBottomClef] = useState<ClefName>('bass')
   const [key, setKey] = useState<KeyOption>(KEY_OPTIONS[7])
-  const [mode, setMode] = useState<'major' | 'minor'>('major')
+  const [tonic, setTonic] = useState<string>(KEY_OPTIONS[7].spec)
+  const [mode, setMode] = useState<ModalMode>('ionian')
   const [theme, setTheme] = useState<Theme>(() =>
     window.matchMedia('(prefers-color-scheme: dark)').matches
       ? 'dark'
@@ -162,30 +195,18 @@ function App() {
     [activeNotes, chord],
   )
   const romanNumeral = useMemo(
-    () =>
-      chord
-        ? detectRomanNumeral(
-            chord.symbol,
-            mode === 'minor' ? key.minorTonic : key.spec,
-          )
-        : null,
-    [chord, key, mode],
+    () => (chord ? detectRomanNumeral(chord.symbol, tonic) : null),
+    [chord, tonic],
   )
   const scales = useMemo(
     () => detectScales(notes.map((n) => n.name)),
     [notes],
   )
   const tensionInfo = useMemo(
-    () =>
-      chord
-        ? computeTensions(
-            chord.symbol,
-            mode === 'minor' ? key.minorTonic : key.spec,
-            mode,
-          )
-        : null,
-    [chord, key, mode],
+    () => (chord ? computeTensions(chord.symbol, tonic, mode) : null),
+    [chord, tonic, mode],
   )
+  const selectedScale = getScaleName(tonic, mode)
 
   return (
     <div className="app">
@@ -207,13 +228,20 @@ function App() {
           <div className="staff-controls">
             <CircleOfFifths
               value={key}
-              mode={mode}
-              onChange={(newKey, newMode) => {
+              mode={mode === 'aeolian' || mode === 'dorian' || mode === 'phrygian' || mode === 'locrian' ? 'minor' : 'major'}
+              onChange={(newKey, clickedMode) => {
                 setKey(newKey)
-                setMode(newMode)
+                if (clickedMode === 'minor') {
+                  setTonic(newKey.minorTonic)
+                  setMode('aeolian')
+                } else {
+                  setTonic(newKey.spec)
+                  setMode('ionian')
+                }
               }}
             />
             <div className="clef-controls">
+              <ModeSelect value={mode} onChange={setMode} />
               <ClefSelect
                 label="Upper staff (RH)"
                 value={topClef}
@@ -243,7 +271,7 @@ function App() {
           romanNumeral={romanNumeral}
         />
         <TensionInfo tension={tensionInfo} />
-        <ScaleInfo scales={scales} />
+        <ScaleInfo scales={scales} selectedScale={selectedScale} />
         <PianoKeyboard
           activeNotes={activeNotes}
           roles={roles}
