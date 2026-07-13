@@ -274,6 +274,55 @@ main {
   border-radius: 999px;
 }
 
+.tension-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 36px;
+  flex-wrap: wrap;
+}
+
+.tension-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tension-group-label {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.tension-group-label-t {
+  color: #0891b2;
+}
+
+.tension-group-label-avoid {
+  color: #dc2626;
+}
+
+.tension-chip {
+  font-size: 12px;
+  font-family: var(--mono);
+  background: rgba(8, 145, 178, 0.15);
+  color: #0891b2;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(8, 145, 178, 0.3);
+}
+
+.avoid-chip {
+  font-size: 12px;
+  font-family: var(--mono);
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  text-decoration: line-through;
+}
+
 .piano-keyboard-wrapper {
   max-width: 100%;
   overflow-x: auto;

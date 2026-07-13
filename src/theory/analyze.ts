@@ -1,4 +1,4 @@
-import { Chord, Midi, Progression } from 'tonal'
+import { Chord, Key, Midi, Note, Progression } from 'tonal'
 
 export interface NoteInfo {
   midi: number
@@ -30,6 +30,45 @@ export function detectChord(
 
   const [symbol, ...alternates] = candidates
   return { symbol, alternates }
+}
+
+export interface TensionResult {
+  tensions: string[]
+  avoids: string[]
+}
+
+export function computeTensions(
+  chordSymbol: string,
+  keyTonic: string,
+  mode: 'major' | 'minor',
+): TensionResult {
+  const scaleNotes: readonly string[] =
+    mode === 'minor'
+      ? Key.minorKey(keyTonic).natural.scale
+      : Key.majorKey(keyTonic).scale
+
+  const chord = Chord.get(chordSymbol)
+  if (chord.empty) return { tensions: [], avoids: [] }
+
+  const chordChromas = new Set(
+    chord.notes.map((n) => Note.chroma(n)).filter((c): c is number => c !== undefined),
+  )
+
+  const tensions: string[] = []
+  const avoids: string[] = []
+
+  for (const scaleTone of scaleNotes) {
+    const chroma = Note.chroma(scaleTone)
+    if (chroma === undefined) continue
+    if (chordChromas.has(chroma)) continue
+
+    // avoid = half step (1 semitone) above any chord tone
+    const isAvoid = [...chordChromas].some((cc) => (chroma - cc + 12) % 12 === 1)
+    if (isAvoid) avoids.push(scaleTone)
+    else tensions.push(scaleTone)
+  }
+
+  return { tensions, avoids }
 }
 
 export function detectRomanNumeral(

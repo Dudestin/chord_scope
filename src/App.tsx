@@ -4,10 +4,11 @@ import { ChordInfo } from './components/ChordInfo'
 import { CircleOfFifths } from './components/CircleOfFifths'
 import { NoteInfo } from './components/NoteInfo'
 import { PianoKeyboard } from './components/PianoKeyboard'
+import { TensionInfo } from './components/TensionInfo'
 import { StaffView } from './components/StaffView'
 import type { ClefName } from './components/StaffView'
 import { useMidi } from './midi/useMidi'
-import { analyzeNotes, detectChord, detectRomanNumeral } from './theory/analyze'
+import { analyzeNotes, computeTensions, detectChord, detectRomanNumeral } from './theory/analyze'
 import type { MidiStatus } from './midi/useMidi'
 import { KEY_OPTIONS } from './theory/keys'
 import type { KeyOption } from './theory/keys'
@@ -169,6 +170,17 @@ function App() {
         : null,
     [chord, key, mode],
   )
+  const tensionInfo = useMemo(
+    () =>
+      chord
+        ? computeTensions(
+            chord.symbol,
+            mode === 'minor' ? key.minorTonic : key.spec,
+            mode,
+          )
+        : null,
+    [chord, key, mode],
+  )
 
   return (
     <div className="app">
@@ -225,6 +237,7 @@ function App() {
           roles={roles}
           romanNumeral={romanNumeral}
         />
+        <TensionInfo tension={tensionInfo} />
         <PianoKeyboard activeNotes={activeNotes} roles={roles} />
       </main>
     </div>
