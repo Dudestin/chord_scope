@@ -360,6 +360,25 @@ main {
   border-color: #b3160c;
 }
 
+.piano-key-dot {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  z-index: 3;
+}
+
+.piano-key-dot-tension {
+  background: #0891b2;
+}
+
+.piano-key-dot-avoid {
+  background: #dc2626;
+}
+
 .piano-key-role-bar {
   position: absolute;
   left: 0;

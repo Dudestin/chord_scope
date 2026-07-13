@@ -238,7 +238,12 @@ function App() {
           romanNumeral={romanNumeral}
         />
         <TensionInfo tension={tensionInfo} />
-        <PianoKeyboard activeNotes={activeNotes} roles={roles} />
+        <PianoKeyboard
+          activeNotes={activeNotes}
+          roles={roles}
+          tensions={tensionInfo?.tensions}
+          avoids={tensionInfo?.avoids}
+        />
       </main>
     </div>
   )

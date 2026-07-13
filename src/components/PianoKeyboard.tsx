@@ -1,8 +1,12 @@
+import { useMemo } from 'react'
+import { Note } from 'tonal'
 import type { ChordRole } from '../theory/roles'
 
 interface PianoKeyboardProps {
   activeNotes: Map<number, number>
   roles: Map<number, ChordRole>
+  tensions?: string[]
+  avoids?: string[]
 }
 
 const LOWEST_MIDI = 21 // A0
@@ -59,7 +63,16 @@ function activeBlackColor(velocity: number): string {
   return `rgb(${lerp(140, 255, t)}, ${lerp(70, 59, t)}, ${lerp(65, 48, t)})`
 }
 
-export function PianoKeyboard({ activeNotes, roles }: PianoKeyboardProps) {
+export function PianoKeyboard({ activeNotes, roles, tensions = [], avoids = [] }: PianoKeyboardProps) {
+  const tensionChromas = useMemo(
+    () => new Set(tensions.map((n) => Note.chroma(n)).filter((c): c is number => c !== undefined)),
+    [tensions],
+  )
+  const avoidChromas = useMemo(
+    () => new Set(avoids.map((n) => Note.chroma(n)).filter((c): c is number => c !== undefined)),
+    [avoids],
+  )
+
   return (
     <div className="piano-keyboard-wrapper">
       <div
@@ -69,6 +82,9 @@ export function PianoKeyboard({ activeNotes, roles }: PianoKeyboardProps) {
         {WHITE_KEYS.map((k) => {
           const velocity = activeNotes.get(k.midi)
           const role = roles.get(k.midi)
+          const chroma = k.midi % 12
+          const isTension = tensionChromas.has(chroma)
+          const isAvoid = avoidChromas.has(chroma)
           return (
             <div
               key={k.midi}
@@ -86,6 +102,9 @@ export function PianoKeyboard({ activeNotes, roles }: PianoKeyboardProps) {
                 }),
               }}
             >
+              {(isTension || isAvoid) && (
+                <div className={isTension ? 'piano-key-dot piano-key-dot-tension' : 'piano-key-dot piano-key-dot-avoid'} />
+              )}
               {role && (
                 <div
                   className="piano-key-role-bar"
@@ -98,6 +117,9 @@ export function PianoKeyboard({ activeNotes, roles }: PianoKeyboardProps) {
         {BLACK_KEYS.map((k) => {
           const velocity = activeNotes.get(k.midi)
           const role = roles.get(k.midi)
+          const chroma = k.midi % 12
+          const isTension = tensionChromas.has(chroma)
+          const isAvoid = avoidChromas.has(chroma)
           return (
             <div
               key={k.midi}
@@ -115,6 +137,9 @@ export function PianoKeyboard({ activeNotes, roles }: PianoKeyboardProps) {
                 }),
               }}
             >
+              {(isTension || isAvoid) && (
+                <div className={isTension ? 'piano-key-dot piano-key-dot-tension' : 'piano-key-dot piano-key-dot-avoid'} />
+              )}
               {role && (
                 <div
                   className="piano-key-role-bar"
