@@ -44,6 +44,55 @@ header h1 {
   border-color: var(--accent-border);
 }
 
+.view-toggle {
+  position: absolute;
+  left: 0;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.view-toggle button {
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 3px 14px;
+  cursor: pointer;
+}
+
+.view-toggle button:hover {
+  color: var(--text-h);
+}
+
+.view-toggle button[aria-pressed='true'] {
+  color: #fff;
+  background: var(--accent);
+}
+
+.view-toggle button:focus-visible,
+.practice-actions button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .header-row {
+    flex-wrap: wrap;
+  }
+
+  .view-toggle {
+    position: static;
+    order: 1;
+  }
+}
+
 main {
   display: flex;
   flex-direction: column;
@@ -175,6 +224,13 @@ main {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 4px 8px;
+}
+
+.clef-select input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 .staff-view {
@@ -450,4 +506,237 @@ main {
   border: 1px solid var(--border);
   border-bottom-width: 2px;
   border-radius: 4px;
+}
+
+/* Practice view. The score sits on white paper in both themes, like the
+   analysis staff, so its colours are fixed rather than themed: grey for what
+   has been played, amber for a slip, red for a wrong key, green for a right
+   key that is down. */
+
+.practice-controls {
+  width: 300px;
+  max-width: 100%;
+}
+
+.practice-controls select {
+  max-width: 190px;
+  text-overflow: ellipsis;
+}
+
+.practice-staff {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.practice-staff svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.chord-prompt {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 680px;
+  max-width: 100%;
+  padding: 20px 28px 28px;
+  color: #08060d;
+}
+
+.chord-prompt-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding-top: 9px;
+  border-top: 3px solid transparent;
+}
+
+.chord-prompt-row-current {
+  border-top-color: #aa3bff;
+}
+
+.chord-prompt-bar {
+  padding: 16px 14px;
+  border-left: 1.5px solid #08060d;
+  font-size: clamp(17px, 4.4vw, 30px);
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.chord-prompt-bar:last-child {
+  border-right: 1.5px solid #08060d;
+}
+
+.chord-prompt-bar-clean {
+  color: #9ca3af;
+}
+
+.chord-prompt-bar-missed {
+  color: #d97706;
+}
+
+.chord-prompt-bar-skipped {
+  color: #dc2626;
+}
+
+.chord-prompt-bar-current {
+  background: rgba(170, 59, 255, 0.14);
+}
+
+.chord-prompt-bar-flawed {
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.practice-stats {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 20px;
+  width: 680px;
+  max-width: 100%;
+}
+
+.practice-figures {
+  display: flex;
+  gap: 28px;
+  min-height: 46px;
+  margin: 0;
+}
+
+.practice-figures dt {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.practice-figures dd {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.practice-figures dd span {
+  margin-left: 6px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text);
+}
+
+@media (max-width: 640px) {
+  .practice-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .practice-figures {
+    flex-wrap: wrap;
+    gap: 8px 24px;
+  }
+}
+
+.practice-stats-empty {
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.practice-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.practice-actions button {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-h);
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.practice-actions button:hover:enabled {
+  border-color: var(--accent-border);
+}
+
+.practice-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.practice-weak {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+}
+
+.practice-weak-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.practice-weak-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  font-family: var(--mono);
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--accent-bg);
+  color: var(--text-h);
+  border: 1px solid var(--accent-border);
+}
+
+.practice-weak-clef,
+.practice-weak-detail {
+  color: var(--text);
+}
+
+.piano-key-white.piano-key-correct {
+  background: #4ade80;
+  border-color: #15803d;
+}
+
+.piano-key-black.piano-key-correct {
+  background: #16a34a;
+}
+
+.piano-key-white.piano-key-wrong {
+  background: #f87171;
+  border-color: #b91c1c;
+}
+
+.piano-key-black.piano-key-wrong {
+  background: #dc2626;
+}
+
+.piano-key-white.piano-key-neutral {
+  background: #cbd5e1;
+}
+
+.piano-key-black.piano-key-neutral {
+  background: #64748b;
+}
+
+.piano-key-white.piano-key-hint {
+  background: #e9d5ff;
+  border-color: #aa3bff;
+}
+
+.piano-key-black.piano-key-hint {
+  background: #a855f7;
+  border-color: #7e22ce;
 }

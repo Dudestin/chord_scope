@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export type MidiStatus =
   | { kind: 'unsupported' }
@@ -7,9 +7,18 @@ export type MidiStatus =
   | { kind: 'no-devices' }
   | { kind: 'connected'; deviceNames: string[] }
 
+export interface MidiNoteEvent {
+  type: 'on' | 'off'
+  note: number
+  time: number
+}
+
+export type MidiNoteListener = (event: MidiNoteEvent) => void
+
 export interface MidiState {
   status: MidiStatus
   activeNotes: Map<number, number>
+  subscribe: (listener: MidiNoteListener) => () => void
 }
 
 function inputNames(access: MIDIAccess): string[] {
@@ -24,6 +33,7 @@ export function useMidi(): MidiState {
     () => new Map(),
   )
   const accessRef = useRef<MIDIAccess | null>(null)
+  const listenersRef = useRef(new Set<MidiNoteListener>())
 
   useEffect(() => {
     if (!navigator.requestMIDIAccess) {
@@ -33,11 +43,18 @@ export function useMidi(): MidiState {
 
     let cancelled = false
 
+    // Called next to setActiveNotes, never inside its updater: updaters run
+    // twice under StrictMode and would deliver every event twice.
+    const emit = (type: MidiNoteEvent['type'], note: number, time: number) => {
+      for (const listener of listenersRef.current) listener({ type, note, time })
+    }
+
     const handleMessage = (event: MIDIMessageEvent) => {
       const data = event.data
       if (!data || data.length < 2) return
       const [statusByte, note, velocity = 0] = data
       const command = statusByte & 0xf0
+      const time = event.timeStamp || performance.now()
 
       if (command === 0x90 && velocity > 0) {
         setActiveNotes((prev) => {
@@ -45,6 +62,7 @@ export function useMidi(): MidiState {
           next.set(note, velocity)
           return next
         })
+        emit('on', note, time)
       } else if (command === 0x80 || (command === 0x90 && velocity === 0)) {
         setActiveNotes((prev) => {
           if (!prev.has(note)) return prev
@@ -52,6 +70,7 @@ export function useMidi(): MidiState {
           next.delete(note)
           return next
         })
+        emit('off', note, time)
       }
     }
 
@@ -99,5 +118,13 @@ export function useMidi(): MidiState {
     }
   }, [])
 
-  return { status, activeNotes }
+  const subscribe = useCallback((listener: MidiNoteListener) => {
+    const listeners = listenersRef.current
+    listeners.add(listener)
+    return () => {
+      listeners.delete(listener)
+    }
+  }, [])
+
+  return { status, activeNotes, subscribe }
 }

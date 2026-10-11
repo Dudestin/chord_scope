@@ -1,22 +1,30 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { ChordInfo } from './components/ChordInfo'
+import { ChordPrompt } from './components/ChordPrompt'
 import { CircleOfFifths } from './components/CircleOfFifths'
 import { NoteInfo } from './components/NoteInfo'
 import { PianoKeyboard } from './components/PianoKeyboard'
+import { PracticeSettings } from './components/PracticeSettings'
+import { PracticeStaff } from './components/PracticeStaff'
+import { PracticeStats } from './components/PracticeStats'
 import { TensionInfo } from './components/TensionInfo'
 import { ScaleInfo } from './components/ScaleInfo'
 import { StaffView } from './components/StaffView'
-import type { ClefName } from './components/StaffView'
 import { useMidi } from './midi/useMidi'
+import { DEFAULT_SETTINGS } from './practice/generate'
+import { usePractice } from './practice/usePractice'
 import { analyzeNotes, computeTensions, detectChord, detectRomanNumeral, detectScales, getScaleName } from './theory/analyze'
 import type { ModalMode } from './theory/analyze'
 import type { MidiStatus } from './midi/useMidi'
+import type { ClefName } from './theory/clefs'
 import { KEY_OPTIONS } from './theory/keys'
 import type { KeyOption } from './theory/keys'
 import { computeChordRoles } from './theory/roles'
+import type { ChordRole } from './theory/roles'
 
 type Theme = 'light' | 'dark'
+type View = 'analyze' | 'practice'
 
 function SunIcon() {
   return (
@@ -67,6 +75,34 @@ function ThemeToggle({
   )
 }
 
+const VIEW_LABELS: Record<View, string> = {
+  analyze: 'Analyze',
+  practice: 'Practice',
+}
+
+function ViewToggle({
+  view,
+  onChange,
+}: {
+  view: View
+  onChange: (view: View) => void
+}) {
+  return (
+    <div className="view-toggle" role="group" aria-label="View">
+      {(Object.keys(VIEW_LABELS) as View[]).map((option) => (
+        <button
+          key={option}
+          type="button"
+          aria-pressed={view === option}
+          onClick={() => onChange(option)}
+        >
+          {VIEW_LABELS[option]}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 const CLEF_LABELS: Record<ClefName, string> = {
   treble: 'Treble clef',
   alto: 'Alto clef',
@@ -100,6 +136,7 @@ function ClefSelect({
 }
 
 const MINOR_MODES = new Set<ModalMode>(['aeolian', 'dorian', 'phrygian', 'locrian'])
+const NO_ROLES = new Map<number, ChordRole>()
 
 function KeyboardHints() {
   return (
@@ -174,7 +211,9 @@ function StatusBanner({ status }: { status: MidiStatus }) {
 }
 
 function App() {
-  const { status, activeNotes } = useMidi()
+  const { status, activeNotes, subscribe } = useMidi()
+  const [view, setView] = useState<View>('analyze')
+  const [practiceSettings, setPracticeSettings] = useState(DEFAULT_SETTINGS)
   const [topClef, setTopClef] = useState<ClefName>('treble')
   const [bottomClef, setBottomClef] = useState<ClefName>('bass')
   const [key, setKey] = useState<KeyOption>(KEY_OPTIONS[7])
@@ -190,6 +229,8 @@ function App() {
     document.documentElement.dataset.theme = theme
   }, [theme])
 
+  // Matched by spec, not identity: re-clicking C puts a copy of its option in
+  // state with the sharps/flats preference flipped.
   const keyIndex = KEY_OPTIONS.indexOf(key)
 
   const handleKeyDown = useCallback(
@@ -251,10 +292,48 @@ function App() {
   )
   const selectedScale = getScaleName(tonic, mode)
 
+  const practiceConfig = useMemo(
+    () => ({ ...practiceSettings, keySpec: key.spec, topClef, bottomClef }),
+    [practiceSettings, key.spec, topClef, bottomClef],
+  )
+  const practice = usePractice(subscribe, practiceConfig, view === 'practice')
+
+  const keySelector = (
+    <CircleOfFifths
+      value={key}
+      mode={mode === 'aeolian' || mode === 'dorian' || mode === 'phrygian' || mode === 'locrian' ? 'minor' : 'major'}
+      onChange={(newKey, clickedMode) => {
+        setKey(newKey)
+        if (clickedMode === 'minor') {
+          setTonic(newKey.minorTonic)
+          setMode('aeolian')
+        } else {
+          setTonic(newKey.spec)
+          setMode('ionian')
+        }
+      }}
+    />
+  )
+  const clefSelects = (
+    <>
+      <ClefSelect
+        label="Upper staff (RH)"
+        value={topClef}
+        onChange={setTopClef}
+      />
+      <ClefSelect
+        label="Lower staff (LH)"
+        value={bottomClef}
+        onChange={setBottomClef}
+      />
+    </>
+  )
+
   return (
     <div className="app">
       <header>
         <div className="header-row">
+          <ViewToggle view={view} onChange={setView} />
           <h1>chord_scope</h1>
           <ThemeToggle
             theme={theme}
@@ -267,61 +346,75 @@ function App() {
       </header>
 
       <main>
-        <div className="staff-row">
-          <div className="staff-controls">
-            <CircleOfFifths
-              value={key}
-              mode={mode === 'aeolian' || mode === 'dorian' || mode === 'phrygian' || mode === 'locrian' ? 'minor' : 'major'}
-              onChange={(newKey, clickedMode) => {
-                setKey(newKey)
-                if (clickedMode === 'minor') {
-                  setTonic(newKey.minorTonic)
-                  setMode('aeolian')
-                } else {
-                  setTonic(newKey.spec)
-                  setMode('ionian')
-                }
-              }}
-            />
-            <div className="clef-controls">
-              <ModeSelect value={mode} onChange={setMode} />
-              <ClefSelect
-                label="Upper staff (RH)"
-                value={topClef}
-                onChange={setTopClef}
+        {view === 'analyze' ? (
+          <>
+            <div className="staff-row">
+              <div className="staff-controls">
+                {keySelector}
+                <div className="clef-controls">
+                  <ModeSelect value={mode} onChange={setMode} />
+                  {clefSelects}
+                  <KeyboardHints />
+                </div>
+              </div>
+              <StaffView
+                notes={notes}
+                topClef={topClef}
+                bottomClef={bottomClef}
+                keySignature={key.spec}
+                roles={roles}
               />
-              <ClefSelect
-                label="Lower staff (LH)"
-                value={bottomClef}
-                onChange={setBottomClef}
-              />
-              <KeyboardHints />
             </div>
-          </div>
-          <StaffView
-            notes={notes}
-            topClef={topClef}
-            bottomClef={bottomClef}
-            keySignature={key.spec}
-            roles={roles}
-          />
-        </div>
-        <NoteInfo notes={notes} roles={roles} />
-        <ChordInfo
-          chord={chord}
-          notes={notes}
-          noteCount={notes.length}
-          roles={roles}
-          romanNumeral={romanNumeral}
-        />
-        <TensionInfo tension={tensionInfo} />
-        <ScaleInfo scales={scales} selectedScale={selectedScale} />
-        <PianoKeyboard
-          activeNotes={activeNotes}
-          roles={roles}
-          tensions={tensionInfo?.tensions}
-          avoids={tensionInfo?.avoids}
-        />
+            <NoteInfo notes={notes} roles={roles} />
+            <ChordInfo
+              chord={chord}
+              notes={notes}
+              noteCount={notes.length}
+              roles={roles}
+              romanNumeral={romanNumeral}
+            />
+            <TensionInfo tension={tensionInfo} />
+            <ScaleInfo scales={scales} selectedScale={selectedScale} />
+            <PianoKeyboard
+              activeNotes={activeNotes}
+              roles={roles}
+              tensions={tensionInfo?.tensions}
+              avoids={tensionInfo?.avoids}
+            />
+          </>
+        ) : (
+          <>
+            {practice.staff && <PracticeStaff model={practice.staff} />}
+            {practice.prompt && <ChordPrompt model={practice.prompt} />}
+            <PracticeStats
+              stats={practice.stats}
+              onSkip={practice.skip}
+              onReset={practice.resetStats}
+            />
+            <PianoKeyboard
+              activeNotes={activeNotes}
+              roles={practice.prompt ? roles : NO_ROLES}
+              marks={practice.marks}
+            />
+            {practice.prompt && (
+              <ChordInfo
+                chord={chord}
+                notes={notes}
+                noteCount={notes.length}
+                roles={roles}
+                romanNumeral={romanNumeral}
+              />
+            )}
+            <div className="staff-row">
+              {keySelector}
+              <div className="clef-controls practice-controls">
+                <PracticeSettings value={practiceSettings} onChange={setPracticeSettings} />
+                {practice.staff && clefSelects}
+                <KeyboardHints />
+              </div>
+            </div>
+          </>
+        )}
       </main>
     </div>
   )

@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Note } from 'tonal'
+import type { KeyMark } from '../practice/view'
 import type { ChordRole } from '../theory/roles'
 
 interface PianoKeyboardProps {
@@ -7,6 +8,8 @@ interface PianoKeyboardProps {
   roles: Map<number, ChordRole>
   tensions?: string[]
   avoids?: string[]
+  // When given, keys are coloured by how they were judged instead of by velocity.
+  marks?: Map<number, KeyMark>
 }
 
 const LOWEST_MIDI = 21 // A0
@@ -63,7 +66,12 @@ function activeBlackColor(velocity: number): string {
   return `rgb(${lerp(140, 255, t)}, ${lerp(70, 59, t)}, ${lerp(65, 48, t)})`
 }
 
-export function PianoKeyboard({ activeNotes, roles, tensions = [], avoids = [] }: PianoKeyboardProps) {
+function keyClassName(base: string, active: boolean, mark: KeyMark | undefined): string {
+  if (mark) return `${base} piano-key-${mark}`
+  return active ? `${base} piano-key-active` : base
+}
+
+export function PianoKeyboard({ activeNotes, roles, tensions = [], avoids = [], marks }: PianoKeyboardProps) {
   const tensionChromas = useMemo(
     () => new Set(tensions.map((n) => Note.chroma(n)).filter((c): c is number => c !== undefined)),
     [tensions],
@@ -85,21 +93,19 @@ export function PianoKeyboard({ activeNotes, roles, tensions = [], avoids = [] }
           const chroma = k.midi % 12
           const isTension = tensionChromas.has(chroma)
           const isAvoid = avoidChromas.has(chroma)
+          const mark = marks?.get(k.midi)
           return (
             <div
               key={k.midi}
-              className={
-                velocity !== undefined
-                  ? 'piano-key piano-key-white piano-key-active'
-                  : 'piano-key piano-key-white'
-              }
+              className={keyClassName('piano-key piano-key-white', velocity !== undefined, mark)}
               style={{
                 left: k.x,
                 width: WHITE_W,
                 height: WHITE_H,
-                ...(velocity !== undefined && {
-                  backgroundColor: activeWhiteColor(velocity),
-                }),
+                ...(velocity !== undefined &&
+                  !marks && {
+                    backgroundColor: activeWhiteColor(velocity),
+                  }),
               }}
             >
               {(isTension || isAvoid) && (
@@ -120,21 +126,19 @@ export function PianoKeyboard({ activeNotes, roles, tensions = [], avoids = [] }
           const chroma = k.midi % 12
           const isTension = tensionChromas.has(chroma)
           const isAvoid = avoidChromas.has(chroma)
+          const mark = marks?.get(k.midi)
           return (
             <div
               key={k.midi}
-              className={
-                velocity !== undefined
-                  ? 'piano-key piano-key-black piano-key-active'
-                  : 'piano-key piano-key-black'
-              }
+              className={keyClassName('piano-key piano-key-black', velocity !== undefined, mark)}
               style={{
                 left: k.x,
                 width: BLACK_W,
                 height: BLACK_H,
-                ...(velocity !== undefined && {
-                  backgroundColor: activeBlackColor(velocity),
-                }),
+                ...(velocity !== undefined &&
+                  !marks && {
+                    backgroundColor: activeBlackColor(velocity),
+                  }),
               }}
             >
               {(isTension || isAvoid) && (

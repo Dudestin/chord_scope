@@ -9,9 +9,9 @@ import {
   Voice,
 } from 'vexflow'
 import type { NoteInfo } from '../theory/analyze'
+import type { ClefName } from '../theory/clefs'
 import type { ChordRole } from '../theory/roles'
-
-export type ClefName = 'treble' | 'alto' | 'bass'
+import { toVexKey } from './vexKey'
 
 interface StaffViewProps {
   notes: NoteInfo[]
@@ -29,13 +29,6 @@ const STAVE_X = 30
 interface NoteEntry {
   midi: number
   vexKey: string
-}
-
-function toVexKey(name: string): string {
-  const match = /^([A-Ga-g][#b]*)(-?\d+)$/.exec(name)
-  if (!match) return 'c/4'
-  const [, letter, octave] = match
-  return `${letter.toLowerCase()}/${octave}`
 }
 
 function buildChordNote(
