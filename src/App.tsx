@@ -231,7 +231,7 @@ function App() {
 
   // Matched by spec, not identity: re-clicking C puts a copy of its option in
   // state with the sharps/flats preference flipped.
-  const keyIndex = KEY_OPTIONS.indexOf(key)
+  const keyIndex = KEY_OPTIONS.findIndex((option) => option.spec === key.spec)
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
