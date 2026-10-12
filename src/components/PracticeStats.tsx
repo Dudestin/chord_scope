@@ -1,4 +1,19 @@
+import type { SlipKind } from '../practice/slips'
 import type { PracticeStats as Stats, WeakItem } from '../practice/stats'
+
+// What each kind of wrong key is called, and the reading behind the name.
+const SLIPS: Record<SlipKind, [string, string]> = {
+  signature: ['Key signature', 'Played the natural of a note the key signature alters'],
+  accidental: ['Accidental', 'Played the note without the accidental written in front of it'],
+  octave: ['Octave', 'The right note in the wrong octave'],
+  step: ['Next key', 'A key right beside the one that was asked for'],
+  clef: ['Other clef', "The note this line would be in the other staff's clef"],
+  third: ['A third off', 'A line or a space too high or too low'],
+  chordThird: ['3rd', "The chord's other third: major for minor or minor for major"],
+  chordFifth: ['5th', 'A fifth the chord does not have'],
+  chordSeventh: ['7th', 'A seventh the chord does not have'],
+  other: ['Other', 'Wrong keys that fit none of the patterns'],
+}
 
 function prettifyLabel(label: string): string {
   return label
@@ -71,6 +86,15 @@ export function PracticeStats({ stats, onSkip, onReset }: PracticeStatsProps) {
             {prettifyLabel(item.label)}
             {showClef && item.clef && <span className="practice-weak-clef">{item.clef}</span>}
             <span className="practice-weak-detail">{weakDetail(item)}</span>
+          </span>
+        ))}
+      </div>
+      <div className="practice-slips">
+        {stats.slips.length > 0 && <span className="practice-weak-label">Wrong keys</span>}
+        {stats.slips.map(({ kind, count }) => (
+          <span key={kind} className="practice-slip-chip" title={SLIPS[kind][1]}>
+            {SLIPS[kind][0]}
+            <span className="practice-weak-detail">{count}</span>
           </span>
         ))}
       </div>

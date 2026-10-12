@@ -32,12 +32,13 @@ export function ChordPrompt({ model }: ChordPromptProps) {
                     `chord-prompt-bar-${step.status}`,
                     current && 'chord-prompt-bar-current',
                     current && model.flawed && 'chord-prompt-bar-flawed',
+                    step.hidden && 'chord-prompt-bar-hidden',
                   ]
                     .filter(Boolean)
                     .join(' ')}
                   aria-current={current ? 'step' : undefined}
                 >
-                  {prettifyChordSymbol(step.symbol)}
+                  {step.hidden ? '\u00a0' : prettifyChordSymbol(step.symbol)}
                 </span>
               )
             })}

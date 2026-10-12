@@ -19,6 +19,8 @@ export interface StaffStep {
   bottom: StaffKey[]
   // Roman numeral written under a cadence chord.
   numeral?: string
+  // Covered while reading ahead: it has to be played from memory.
+  hidden: boolean
 }
 
 export interface StaffMeasure {
@@ -42,6 +44,7 @@ export interface StaffModel {
 export interface PromptStep {
   symbol: string
   status: StepStatus
+  hidden: boolean
 }
 
 export interface PromptModel {
@@ -63,6 +66,20 @@ function statusAt(state: SessionState, measure: number, step: number): StepStatu
   return measure === state.position.measure && step < state.outcomes.length
     ? state.outcomes[step]
     : 'pending'
+}
+
+// While reading ahead, what is left of a measure is covered as soon as its
+// first step has been played. A step that has been missed is shown again:
+// the slip is on record, and the player needs a way on.
+function isHidden(state: SessionState, measure: number, step: number): boolean {
+  const { position } = state
+  return (
+    state.config.readAhead &&
+    measure === position.measure &&
+    position.step > 0 &&
+    step >= position.step &&
+    !(step === position.step && state.stepWrong.length > 0)
+  )
 }
 
 export function currentKey(state: SessionState): string {
@@ -111,6 +128,7 @@ export function selectStaffModel(state: SessionState): StaffModel | null {
             top: keys('top'),
             bottom: keys('bottom'),
             numeral: step.kind === 'notes' ? step.chord?.numeral : undefined,
+            hidden: isHidden(state, measure, index),
           }
         }),
       }
@@ -128,6 +146,7 @@ export function selectPromptModel(state: SessionState): PromptModel | null {
       steps.map((step, index) => ({
         symbol: step.kind === 'symbol' ? step.symbol : '',
         status: statusAt(state, measure, index),
+        hidden: isHidden(state, measure, index),
       })),
     ),
     cursor: state.position,

@@ -1,12 +1,15 @@
 import type { ClefName } from '../theory/clefs'
 import type { DrillKind } from './generate'
 import type { StepResult } from './session'
+import type { SlipKind } from './slips'
 
 // Longer than this is the player being away, not reading.
 const IDLE_MS = 15000
 const MIN_ATTEMPTS = 3
 const WEAK_LIMIT = 5
 const SLOW_FACTOR = 1.5
+// A missed item stays in focus until it has been played clean this often in a row.
+const CLEAR_AFTER = 3
 
 export interface WeakItem {
   key: string
@@ -17,6 +20,11 @@ export interface WeakItem {
   medianMs: number | null
 }
 
+export interface SlipCount {
+  kind: SlipKind
+  count: number
+}
+
 export interface PracticeStats {
   completed: number
   clean: number
@@ -24,6 +32,8 @@ export interface PracticeStats {
   streak: number
   bestStreak: number
   weak: WeakItem[]
+  // Wrong keys by kind of mistake, most frequent first, the unexplained last.
+  slips: SlipCount[]
 }
 
 function median(values: number[]): number | null {
@@ -42,6 +52,7 @@ export function computeStats(log: StepResult[], drill: DrillKind): PracticeStats
   const results = log.filter((result) => result.drill === drill)
   const times: number[] = []
   const items = new Map<string, WeakItem & { times: number[] }>()
+  const slipCounts = new Map<SlipKind, number>()
   let clean = 0
   let streak = 0
   let bestStreak = 0
@@ -52,6 +63,7 @@ export function computeStats(log: StepResult[], drill: DrillKind): PracticeStats
     if (result.outcome === 'clean') clean++
     streak = result.outcome === 'clean' ? streak + 1 : 0
     bestStreak = Math.max(bestStreak, streak)
+    for (const kind of result.slips) slipCounts.set(kind, (slipCounts.get(kind) ?? 0) + 1)
 
     for (const { key, label, clef, missed } of result.items) {
       const item = items.get(key) ?? { key, label, clef, attempts: 0, missed: 0, medianMs: null, times: [] }
@@ -77,5 +89,24 @@ export function computeStats(log: StepResult[], drill: DrillKind): PracticeStats
     )
     .slice(0, WEAK_LIMIT)
 
-  return { completed: results.length, clean, medianMs, streak, bestStreak, weak }
+  const slips = [...slipCounts]
+    .map(([kind, count]) => ({ kind, count }))
+    .sort((a, b) => Number(a.kind === 'other') - Number(b.kind === 'other') || b.count - a.count)
+
+  return { completed: results.length, clean, medianMs, streak, bestStreak, weak, slips }
+}
+
+// The items (by `ResultItem.key`) the exercise should bring back: missed, and
+// not yet played clean CLEAR_AFTER times running since.
+export function focusItems(log: StepResult[], drill: DrillKind): Set<string> {
+  const cleanSince = new Map<string, number>()
+  for (const result of log) {
+    if (result.drill !== drill) continue
+    for (const { key, missed } of result.items) {
+      const clean = cleanSince.get(key)
+      if (missed) cleanSince.set(key, 0)
+      else if (clean !== undefined) cleanSince.set(key, clean + 1)
+    }
+  }
+  return new Set([...cleanSince].filter(([, clean]) => clean < CLEAR_AFTER).map(([key]) => key))
 }

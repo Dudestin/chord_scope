@@ -18,6 +18,8 @@ const DRILLS: [DrillKind, string][] = [
   ['cadence', 'Cadences'],
 ]
 
+const MEASURE_COUNTS: [number, string][] = [1, 2, 3, 4, 6, 8].map((count) => [count, String(count)])
+
 const STAVES: [Settings['staff'], string][] = [
   ['top', 'Upper (RH)'],
   ['bottom', 'Lower (LH)'],
@@ -94,6 +96,23 @@ function Choice<T extends string | number>({
   )
 }
 
+function Toggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string
+  checked: boolean
+  onChange: (checked: boolean) => void
+}) {
+  return (
+    <label className="clef-select">
+      {label}
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    </label>
+  )
+}
+
 export function PracticeSettings({ value, onChange }: PracticeSettingsProps) {
   const onStaff = value.drill !== 'symbols' && value.drill !== 'cadence'
 
@@ -104,6 +123,12 @@ export function PracticeSettings({ value, onChange }: PracticeSettingsProps) {
         value={value.drill}
         options={DRILLS}
         onChange={(drill) => onChange({ ...value, drill })}
+      />
+      <Choice
+        label="Measures"
+        value={value.measures}
+        options={MEASURE_COUNTS}
+        onChange={(measures) => onChange({ ...value, measures })}
       />
       {(value.drill === 'notes' || value.drill === 'chords') && (
         <Choice
@@ -165,16 +190,30 @@ export function PracticeSettings({ value, onChange }: PracticeSettingsProps) {
             options={LEAPS}
             onChange={(leap) => onChange({ ...value, leap })}
           />
-          <label className="clef-select">
-            Accidentals
-            <input
-              type="checkbox"
-              checked={value.accidentals}
-              onChange={(e) => onChange({ ...value, accidentals: e.target.checked })}
-            />
-          </label>
+          <Toggle
+            label="Accidentals"
+            checked={value.accidentals}
+            onChange={(accidentals) => onChange({ ...value, accidentals })}
+          />
         </>
       )}
+      {value.drill !== 'cadence' && (
+        <Toggle
+          label="Repeat misses"
+          checked={value.repeatMisses}
+          onChange={(repeatMisses) => onChange({ ...value, repeatMisses })}
+        />
+      )}
+      <Toggle
+        label="Play through misses"
+        checked={value.playThrough}
+        onChange={(playThrough) => onChange({ ...value, playThrough })}
+      />
+      <Toggle
+        label="Read ahead"
+        checked={value.readAhead}
+        onChange={(readAhead) => onChange({ ...value, readAhead })}
+      />
     </>
   )
 }

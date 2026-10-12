@@ -21,10 +21,17 @@ type StaffName = 'top' | 'bottom'
 
 const STAFF_NAMES: StaffName[] = ['top', 'bottom']
 
-const WIDTH = 662
-const HEIGHT = 260
+// A full system fills the page: the 1280px of `#root` less the padding around
+// the app and the paper's own padding and border.
+const WIDTH = 1222
+// The score is broken into systems of this many measures, one below the other.
+const MEASURES_PER_SYSTEM = 4
+const SYSTEM_HEIGHT = 260
+// Keeps the rail over a measure clear of the numerals under the system above.
+const SYSTEM_GAP = 16
 const STAVE_X = 30
 const RIGHT_PAD = 8
+// Vertical positions are measured from the top of a measure's system.
 const STAVE_Y: Record<StaffName, number> = { top: 20, bottom: 130 }
 // Vertical extent of the cursor on each staff, ledger lines included.
 const CURSOR_Y: Record<StaffName, [number, number]> = { top: [6, 128], bottom: [132, 254] }
@@ -48,6 +55,8 @@ const INK = {
   down: '#16a34a',
 }
 const CURSOR_FILL = 'rgba(170, 59, 255, 0.14)'
+// The card over steps that are to be played from memory.
+const COVER_FILL = 'rgba(8, 6, 13, 0.07)'
 const CURSOR_FILL_FLAWED = 'rgba(220, 38, 38, 0.12)'
 const RAIL_FILL = '#aa3bff'
 
@@ -55,6 +64,8 @@ interface Measure extends StaffMeasure {
   staves: Record<StaffName, Stave>
   noteStart: number
   noteEnd: number
+  // Top of the system the measure is in.
+  y: number
 }
 
 // A stave that knows its clef without drawing one: a key signature in a later
@@ -66,14 +77,25 @@ class ContinuedStave extends Stave {
   }
 }
 
-// The first measure opens with clef and key signature; a later one only shows
-// a signature when the key changes, cancelling the old one if nothing replaces it.
+function opensSystem(index: number): boolean {
+  return index % MEASURES_PER_SYSTEM === 0
+}
+
+function systemTop(index: number): number {
+  return Math.floor(index / MEASURES_PER_SYSTEM) * (SYSTEM_HEIGHT + SYSTEM_GAP)
+}
+
+// A system opens with clef and key signature; a later measure only shows a
+// signature when the key changes, cancelling the old one if nothing replaces it.
 function buildStave(model: StaffModel, index: number, name: StaffName, x: number, width: number): Stave {
   const clef = name === 'top' ? model.topClef : model.bottomClef
   const { keySignature } = model.measures[index]
   const previous = model.measures[index - 1]?.keySignature
-  const stave = new ContinuedStave(x, STAVE_Y[name], width, { leftBar: index === 0 }).useClef(clef)
-  if (index === 0) {
+  const opens = opensSystem(index)
+  const stave = new ContinuedStave(x, systemTop(index) + STAVE_Y[name], width, {
+    leftBar: opens,
+  }).useClef(clef)
+  if (opens) {
     stave.addClef(clef).addKeySignature(keySignature)
   } else if (keySignature !== previous) {
     stave.addKeySignature(keySignature, keySignature === 'C' ? previous : undefined)
@@ -81,17 +103,27 @@ function buildStave(model: StaffModel, index: number, name: StaffName, x: number
   return stave
 }
 
-// Every measure gets the same room for notes, after whatever its barline,
-// clef and key signature take up.
+// Within a system every measure gets the same room for notes, after whatever
+// its barline, clef and key signature take up. A system that is not full keeps
+// the measure width of one that is.
 function layoutMeasures(model: StaffModel, context: RenderContext): Measure[] {
   const leads = model.measures.map((_, index) =>
     Math.max(...STAFF_NAMES.map((name) => buildStave(model, index, name, 0, 100).getNoteStartX())),
   )
-  const body =
-    (WIDTH - STAVE_X - RIGHT_PAD - leads.reduce((sum, lead) => sum + lead, 0)) / leads.length
+  // What a measure that opens with nothing takes up; stands in for the missing ones.
+  const bare = new Stave(0, 0, 100, { leftBar: false }).getNoteStartX()
 
   let x = STAVE_X
+  let body = 0
   return model.measures.map((measure, index) => {
+    if (opensSystem(index)) {
+      const inSystem = leads.slice(index, index + MEASURES_PER_SYSTEM)
+      const taken =
+        inSystem.reduce((sum, lead) => sum + lead, 0) +
+        (MEASURES_PER_SYSTEM - inSystem.length) * bare
+      x = STAVE_X
+      body = (WIDTH - STAVE_X - RIGHT_PAD - taken) / MEASURES_PER_SYSTEM
+    }
     const width = leads[index] + body
     const noteStart = x + leads[index]
     // The two clefs differ in width; without this the hands would not line up.
@@ -99,7 +131,7 @@ function layoutMeasures(model: StaffModel, context: RenderContext): Measure[] {
       buildStave(model, index, name, x, width).setNoteStartX(noteStart).setContext(context)
     const staves = { top: stave('top'), bottom: stave('bottom') }
     x += width
-    return { ...measure, staves, noteStart, noteEnd: x }
+    return { ...measure, staves, noteStart, noteEnd: x, y: systemTop(index) }
   })
 }
 
@@ -181,15 +213,22 @@ function fillRect(context: RenderContext, fill: string, x: number, y: number, wi
   context.restore()
 }
 
+// Tints one step's cell over the staves it has notes on.
+function fillCell(context: RenderContext, fill: string, measure: Measure, index: number, staves: StaffName[]) {
+  const top = Math.min(...staves.map((name) => CURSOR_Y[name][0]))
+  const bottom = Math.max(...staves.map((name) => CURSOR_Y[name][1]))
+  fillRect(context, fill, cellLeft(measure, index), measure.y + top, cellWidth(measure), bottom - top)
+}
+
 function prettifyKeyName(name: string): string {
   const minor = name.endsWith('m')
   const tonic = (minor ? name.slice(0, -1) : name).replace('#', '♯').replace('b', '♭')
   return `${tonic} ${minor ? 'minor' : 'major'}`
 }
 
-// Draws 'I', 'V7' or 'I6/4' centred on `centre`, the figures raised beside the
-// numeral and a six-four stacked as figured bass.
-function drawNumeral(context: RenderContext, numeral: string, centre: number, color: string) {
+// Draws 'I', 'V7' or 'I6/4' centred on `centre` with its baseline at `y`, the
+// figures raised beside the numeral and a six-four stacked as figured bass.
+function drawNumeral(context: RenderContext, numeral: string, centre: number, y: number, color: string) {
   const [, base = numeral, figures = ''] = /^([ivIV]+)(.*)$/.exec(numeral) ?? []
   const stacked = figures.split('/')
 
@@ -200,10 +239,10 @@ function drawNumeral(context: RenderContext, numeral: string, centre: number, co
   context.setFont(NUMERAL_FONT, 17)
   const baseWidth = context.measureText(base).width
   const left = centre - (baseWidth + figureWidth) / 2
-  context.fillText(base, left, NUMERAL_Y)
+  context.fillText(base, left, y)
   context.setFont(NUMERAL_FONT, 10)
   stacked.forEach((figure, row) => {
-    context.fillText(figure, left + baseWidth + 1, NUMERAL_Y - 8 + row * 9)
+    context.fillText(figure, left + baseWidth + 1, y - 8 + row * 9)
   })
   context.restore()
 }
@@ -211,15 +250,20 @@ function drawNumeral(context: RenderContext, numeral: string, centre: number, co
 function draw(container: HTMLDivElement, model: StaffModel) {
   container.innerHTML = ''
   const renderer = new Renderer(container, Renderer.Backends.SVG)
-  renderer.resize(WIDTH, HEIGHT)
-  // VexFlow also pins the size inline, which would stop the stylesheet from
-  // scaling the score down on a narrow window.
-  container.querySelector('svg')?.removeAttribute('style')
   const context = renderer.getContext()
 
   const measures = layoutMeasures(model, context)
+  // The paper is cut to what is on it: a lone measure does not fill its system.
+  renderer.resize(
+    Math.ceil(Math.max(...measures.map((measure) => measure.noteEnd))) + RIGHT_PAD,
+    systemTop(measures.length - 1) + SYSTEM_HEIGHT,
+  )
+  // VexFlow also pins the size inline, which would stop the stylesheet from
+  // scaling the score down on a narrow window.
+  container.querySelector('svg')?.removeAttribute('style')
   const notes: StaveNote[] = []
   const labels: (() => void)[] = []
+  const covers: (() => void)[] = []
   let cursorHead = 0
   let cursorStaves: StaffName[] = []
 
@@ -234,40 +278,58 @@ function draw(container: HTMLDivElement, model: StaffModel) {
         return note ? [{ name, note, stave: measure.staves[name] }] : []
       })
       if (parts.length === 0) return
+      const underCursor = measureIndex === model.cursor.measure && stepIndex === model.cursor.step
+      if (underCursor) cursorStaves = parts.map((part) => part.name)
+      // A covered step keeps its notes out of the drawing, though they still
+      // counted when the measure's accidentals were worked out.
+      if (step.hidden) {
+        const staves = parts.map((part) => part.name)
+        if (!underCursor) covers.push(() => fillCell(context, COVER_FILL, measure, stepIndex, staves))
+        return
+      }
       const headLeft = place(parts, cellLeft(measure, stepIndex), cellWidth(measure))
       notes.push(...parts.map((part) => part.note))
       if (step.numeral) {
         labels.push(() =>
-          drawNumeral(context, step.numeral ?? '', headLeft + parts[0].note.getGlyphWidth() / 2, INK[step.status]),
+          drawNumeral(
+            context,
+            step.numeral ?? '',
+            headLeft + parts[0].note.getGlyphWidth() / 2,
+            measure.y + NUMERAL_Y,
+            INK[step.status],
+          ),
         )
       }
-      if (measureIndex === model.cursor.measure && stepIndex === model.cursor.step) {
-        cursorHead = headLeft
-        cursorStaves = parts.map((part) => part.name)
-      }
+      if (underCursor) cursorHead = headLeft
     })
   })
 
+  for (const drawCover of covers) drawCover()
   const current = measures[model.cursor.measure]
   if (current && cursorStaves.length > 0) {
-    const top = Math.min(...cursorStaves.map((name) => CURSOR_Y[name][0]))
-    const bottom = Math.max(...cursorStaves.map((name) => CURSOR_Y[name][1]))
-    fillRect(
+    fillCell(
       context,
       model.flawed ? CURSOR_FILL_FLAWED : CURSOR_FILL,
-      cellLeft(current, model.cursor.step),
-      top,
-      cellWidth(current),
-      bottom - top,
+      current,
+      model.cursor.step,
+      cursorStaves,
     )
-    fillRect(context, RAIL_FILL, current.noteStart, 0, current.noteEnd - current.noteStart - CELL_INSET, RAIL_HEIGHT)
+    fillRect(
+      context,
+      RAIL_FILL,
+      current.noteStart,
+      current.y,
+      current.noteEnd - current.noteStart - CELL_INSET,
+      RAIL_HEIGHT,
+    )
   }
 
   measures.forEach(({ staves }, index) => {
     staves.top.draw()
     staves.bottom.draw()
-    const connectors =
-      index === 0 ? (['brace', 'singleLeft', 'singleRight'] as const) : (['singleRight'] as const)
+    const connectors = opensSystem(index)
+      ? (['brace', 'singleLeft', 'singleRight'] as const)
+      : (['singleRight'] as const)
     for (const type of connectors) {
       new StaveConnector(staves.top, staves.bottom).setType(type).setContext(context).draw()
     }
@@ -300,7 +362,11 @@ function draw(container: HTMLDivElement, model: StaffModel) {
     context.save()
     context.setFillStyle(INK.pending)
     context.setFont(TEXT_FONT, 13)
-    context.fillText(prettifyKeyName(measure.keyName), measure.noteStart + CELL_INSET, KEY_NAME_Y)
+    context.fillText(
+      prettifyKeyName(measure.keyName),
+      measure.noteStart + CELL_INSET,
+      measure.y + KEY_NAME_Y,
+    )
     context.restore()
   }
   for (const drawLabel of labels) drawLabel()

@@ -65,7 +65,8 @@
 }
 
 #root {
-  max-width: 720px;
+  /* Wide enough for a line of four measures in the Practice view. */
+  max-width: 1280px;
   margin: 0 auto;
   min-height: 100svh;
   display: flex;

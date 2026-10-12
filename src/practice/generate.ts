@@ -2,7 +2,6 @@ import { Chord, Key, Midi, Note, Scale } from 'tonal'
 import { CLEF_MIDDLE_LINE, diatonicPosition } from '../theory/clefs'
 import type { ClefName } from '../theory/clefs'
 
-export const MEASURES = 2
 export const STEPS_PER_MEASURE = 4
 
 export type DrillKind = 'notes' | 'hands' | 'chords' | 'symbols' | 'cadence'
@@ -12,6 +11,8 @@ export type CadenceKind = 'basic' | 'sixFour'
 
 export interface PracticeSettings {
   drill: DrillKind
+  // Measures on show at once; the one being played is followed by the rest.
+  measures: number
   staff: StaffName | 'alternate'
   // Ledger lines allowed beyond the staff (0–3).
   ledger: number
@@ -26,10 +27,19 @@ export interface PracticeSettings {
   inversion: number
   // Move one key round the circle of fifths after every cadence.
   cycleKeys: boolean
+  // Bring notes and chords that were missed back more often.
+  repeatMisses: boolean
+  // A step that went wrong need not be put right: the next one is accepted
+  // too, so a slip can be played through.
+  playThrough: boolean
+  // Cover what is left of a measure once its first step is played, so the
+  // rest has to be read beforehand and the eyes are free for the next measure.
+  readAhead: boolean
 }
 
 export const DEFAULT_SETTINGS: PracticeSettings = {
   drill: 'notes',
+  measures: 4,
   staff: 'top',
   ledger: 1,
   leap: 4,
@@ -39,6 +49,9 @@ export const DEFAULT_SETTINGS: PracticeSettings = {
   cadence: 'basic',
   inversion: 0,
   cycleKeys: false,
+  repeatMisses: true,
+  playThrough: true,
+  readAhead: false,
 }
 
 export interface PracticeConfig extends PracticeSettings {
@@ -77,6 +90,9 @@ const RESOLVE_CHANCE = 0.5
 const KEEP_DIRECTION = 0.65
 const MIN_HAND_GAP = 3
 const HAND_ATTEMPTS = 40
+// How much likelier a note or chord in focus is to come up than it would be.
+const FOCUS_WEIGHT = 4
+const NO_FOCUS: ReadonlySet<string> = new Set()
 
 // Relative likelihood of a melodic interval, indexed by its size in steps:
 // mostly stepwise, an occasional repeated note, rarer wide leaps.
@@ -159,7 +175,7 @@ function pickWeighted<T>(rng: Rng, items: readonly (readonly [T, number])[]): T 
 }
 
 // The accidental ('', '#' or 'b') each letter carries under the key signature.
-function keyAccidentals(keySpec: string): string[] {
+export function keyAccidentals(keySpec: string): string[] {
   const accidentals = Array.from(LETTERS, () => '')
   for (const name of Scale.get(`${keySpec} major`).notes) {
     accidentals[LETTERS.indexOf(name[0])] = name.slice(1)
@@ -169,9 +185,18 @@ function keyAccidentals(keySpec: string): string[] {
 
 // Notes are spelled from their staff position, never from a MIDI number, so
 // that Cb4 or E#4 land on the line the key signature expects.
+export function nameAt(position: number, accidental: string): string {
+  return `${LETTERS[position % 7]}${accidental}${Math.floor(position / 7)}`
+}
+
 function noteAt(position: number, accidental: string, staff: StaffName): TargetNote {
-  const name = `${LETTERS[position % 7]}${accidental}${Math.floor(position / 7)}`
+  const name = nameAt(position, accidental)
   return { midi: Note.midi(name) ?? 0, name, staff }
+}
+
+// What a staff note is tracked as: the same name is another line in another clef.
+export function noteKey(clef: ClefName, name: string): string {
+  return `${clef}:${name}`
 }
 
 // A semitone up or down from what the key signature gives a letter: a flat is
@@ -220,7 +245,16 @@ function moveTo(walker: Walker, position: number) {
   walker.position = position
 }
 
-function nextPosition(rng: Rng, walker: Walker, low: number, high: number, leap: number): number {
+// `emphasis` scales the odds of landing on a position. A repeated note is left
+// alone: playing it again straight away is no test of reading it.
+function nextPosition(
+  rng: Rng,
+  walker: Walker,
+  low: number,
+  high: number,
+  leap: number,
+  emphasis: (position: number) => number,
+): number {
   const from = walker.position
   if (from === null) {
     const margin = Math.floor((high - low) / 4)
@@ -231,15 +265,23 @@ function nextPosition(rng: Rng, walker: Walker, low: number, high: number, leap:
   for (let position = low; position <= high; position++) {
     const size = Math.abs(position - from)
     if (leap === 0) {
-      if (size > 0) candidates.push([position, 1])
+      if (size > 0) candidates.push([position, emphasis(position)])
+    } else if (size === 0) {
+      candidates.push([position, INTERVAL_WEIGHTS[0]])
     } else if (size <= leap) {
-      const along =
-        size === 0 ? 1 : Math.sign(position - from) === walker.direction ? KEEP_DIRECTION : 1 - KEEP_DIRECTION
-      candidates.push([position, INTERVAL_WEIGHTS[size] * along])
+      const along = Math.sign(position - from) === walker.direction ? KEEP_DIRECTION : 1 - KEEP_DIRECTION
+      candidates.push([position, INTERVAL_WEIGHTS[size] * along * emphasis(position)])
     }
   }
   if (candidates.length === 0) return Math.min(high, Math.max(low, from))
   return pickWeighted(rng, candidates)
+}
+
+// Alternating staves take turns measure by measure, starting on the upper one.
+function soloStaff(config: PracticeConfig, prev: Step[] | null): StaffName {
+  if (config.staff !== 'alternate') return config.staff
+  const before = prev?.[0]
+  return before?.kind === 'notes' && before.notes[0].staff === 'top' ? 'bottom' : 'top'
 }
 
 // Hands should not cross. If the clef choice makes that impossible, settle for
@@ -250,7 +292,12 @@ function handsFit(top: TargetNote, bottom: TargetNote, attempt: number): boolean
   return attempt > HAND_ATTEMPTS ? gap !== 0 : gap >= MIN_HAND_GAP
 }
 
-function staffSteps(config: PracticeConfig, rng: Rng, slot: number, prev: Step[] | null): Step[] {
+function staffSteps(
+  config: PracticeConfig,
+  rng: Rng,
+  prev: Step[] | null,
+  focus: ReadonlySet<string>,
+): Step[] {
   const inKey = keyAccidentals(config.keySpec)
   // Staff drills only read the key signature, so degrees count from the major tonic.
   const tonic = LETTERS.indexOf(config.keySpec[0])
@@ -262,8 +309,14 @@ function staffSteps(config: PracticeConfig, rng: Rng, slot: number, prev: Step[]
     top: walkerAfter(prev, 'top', rng),
     bottom: walkerAfter(prev, 'bottom', rng),
   }
-  const solo: StaffName =
-    config.staff === 'alternate' ? (slot % 2 === 0 ? 'top' : 'bottom') : config.staff
+  const solo = soloStaff(config, prev)
+
+  // The line is drawn towards notes in focus, which are known by the name the
+  // key signature gives them.
+  const emphasis = (staff: StaffName) => (position: number) => {
+    const clef = staff === 'top' ? config.topClef : config.bottomClef
+    return focus.has(noteKey(clef, nameAt(position, inKey[position % 7]))) ? FOCUS_WEIGHT : 1
+  }
 
   const wantsAlter = (chance: number) => config.accidentals && rng.next() < chance
   const spell = (position: number, staff: StaffName, alter: boolean): TargetNote => {
@@ -276,7 +329,7 @@ function staffSteps(config: PracticeConfig, rng: Rng, slot: number, prev: Step[]
   }
   const propose = (staff: StaffName): TargetNote => {
     const [low, high] = ranges[staff]
-    const position = nextPosition(rng, walkers[staff], low, high, config.leap)
+    const position = nextPosition(rng, walkers[staff], low, high, config.leap, emphasis(staff))
     return spell(position, staff, wantsAlter(ALTER_CHANCE))
   }
   const commit = (note: TargetNote) => moveTo(walkers[note.staff], diatonicPosition(note.name))
@@ -298,7 +351,15 @@ function staffSteps(config: PracticeConfig, rng: Rng, slot: number, prev: Step[]
       const shapes = CHORD_SHAPES[config.chordSize || pick(rng, [2, 3, 4])] ?? CHORD_SHAPES[3]
       const shape = pick(rng, shapes)
       const [low, high] = ranges[solo]
-      const root = nextPosition(rng, walkers[solo], low, high - shape[shape.length - 1], config.leap)
+      const weigh = emphasis(solo)
+      const root = nextPosition(
+        rng,
+        walkers[solo],
+        low,
+        high - shape[shape.length - 1],
+        config.leap,
+        (position) => Math.max(...shape.map((offset) => weigh(position + offset))),
+      )
       moveTo(walkers[solo], root)
 
       // One altered note at most. It never lands on the scale tone next to
@@ -383,7 +444,12 @@ function chordPool(keySpec: string, pool: ChordPool): PoolChord[] {
   return chords
 }
 
-function symbolSteps(config: PracticeConfig, rng: Rng, prev: Step[] | null): Step[] {
+function symbolSteps(
+  config: PracticeConfig,
+  rng: Rng,
+  prev: Step[] | null,
+  focus: ReadonlySet<string>,
+): Step[] {
   const pool = chordPool(config.keySpec, config.pool)
   const last = prev?.[prev.length - 1]
   let previous = last?.kind === 'symbol' ? last.symbol : null
@@ -395,7 +461,10 @@ function symbolSteps(config: PracticeConfig, rng: Rng, prev: Step[] | null): Ste
       const resolved = candidates.filter((chord) => chord.degree === (before.degree + 3) % 7)
       if (resolved.length > 0) candidates = resolved
     }
-    const { symbol } = pick(rng, candidates)
+    const { symbol } = pickWeighted(
+      rng,
+      candidates.map((chord) => [chord, focus.has(chord.symbol) ? FOCUS_WEIGHT : 1] as const),
+    )
     previous = symbol
     const chromas = Chord.get(symbol)
       .notes.map((note) => Note.chroma(note))
@@ -405,22 +474,24 @@ function symbolSteps(config: PracticeConfig, rng: Rng, prev: Step[] | null): Ste
 }
 
 // `keySpec` lets a measure sit in another key than the one the session started
-// in, which is how cadences travel round the circle of fifths.
+// in, which is how cadences travel round the circle of fifths. `focus` holds
+// the notes (`noteKey`) or chord symbols to favour; a cadence is fixed and
+// takes no notice of it.
 export function generateMeasure(
   config: PracticeConfig,
   seed: number,
-  slot: number,
   prev: Step[] | null,
   keySpec: string = config.keySpec,
+  focus: ReadonlySet<string> = NO_FOCUS,
 ): { steps: Step[]; seed: number } {
   const rng = createRng(seed)
   const local = keySpec === config.keySpec ? config : { ...config, keySpec }
   const steps =
     local.drill === 'symbols'
-      ? symbolSteps(local, rng, prev)
+      ? symbolSteps(local, rng, prev, focus)
       : local.drill === 'cadence'
         ? cadenceSteps(local, rng)
-        : staffSteps(local, rng, slot, prev)
+        : staffSteps(local, rng, prev, focus)
   return { steps, seed: rng.state() }
 }
 

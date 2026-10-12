@@ -1,4 +1,7 @@
 .app {
+  /* Everything but the practice score keeps to a column this wide in the
+     middle of the page. */
+  --column: 680px;
   display: flex;
   flex-direction: column;
   flex-grow: 1;
@@ -10,6 +13,7 @@
 header {
   text-align: center;
   width: 100%;
+  max-width: var(--column);
 }
 
 header h1 {
@@ -99,6 +103,10 @@ main {
   align-items: center;
   gap: 20px;
   width: 100%;
+}
+
+main > :not(.practice-staff) {
+  max-width: min(100%, var(--column));
 }
 
 .status {
@@ -588,6 +596,11 @@ main {
   background: rgba(220, 38, 38, 0.12);
 }
 
+/* A symbol to be played from memory while reading ahead. */
+.chord-prompt-bar-hidden:not(.chord-prompt-bar-current) {
+  background: rgba(8, 6, 13, 0.07);
+}
+
 .practice-stats {
   box-sizing: border-box;
   display: grid;
@@ -672,7 +685,8 @@ main {
   cursor: default;
 }
 
-.practice-weak {
+.practice-weak,
+.practice-slips {
   grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
@@ -698,6 +712,18 @@ main {
   background: var(--accent-bg);
   color: var(--text-h);
   border: 1px solid var(--accent-border);
+}
+
+.practice-slip-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--code-bg);
+  color: var(--text-h);
+  border: 1px solid var(--border);
 }
 
 .practice-weak-clef,
