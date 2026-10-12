@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Note } from 'tonal'
+import type { KeyHeat } from '../practice/stats'
 import type { KeyMark } from '../practice/view'
 import type { ChordRole } from '../theory/roles'
 
@@ -10,6 +11,8 @@ interface PianoKeyboardProps {
   avoids?: string[]
   // When given, keys are coloured by how they were judged instead of by velocity.
   marks?: Map<number, KeyMark>
+  // Practice: keys that have been missed are shaded by how often, unless a mark is on them.
+  heat?: Map<number, KeyHeat>
 }
 
 const LOWEST_MIDI = 21 // A0
@@ -66,12 +69,28 @@ function activeBlackColor(velocity: number): string {
   return `rgb(${lerp(140, 255, t)}, ${lerp(70, 59, t)}, ${lerp(65, 48, t)})`
 }
 
+// A key missed only now and then still has to stand out from its neighbours,
+// and a black key needs a longer way from black for that than a white one from white.
+function heatWhiteColor(level: number): string {
+  const t = 0.15 + 0.85 * level
+  return `rgb(${lerp(255, 245, t)}, ${lerp(255, 158, t)}, ${lerp(255, 11, t)})`
+}
+
+function heatBlackColor(level: number): string {
+  const t = 0.3 + 0.7 * level
+  return `rgb(${lerp(34, 245, t)}, ${lerp(34, 158, t)}, ${lerp(34, 11, t)})`
+}
+
+function heatTitle(heat: KeyHeat | undefined): string | undefined {
+  return heat && `Missed ${heat.missed} of ${heat.attempts}`
+}
+
 function keyClassName(base: string, active: boolean, mark: KeyMark | undefined): string {
   if (mark) return `${base} piano-key-${mark}`
   return active ? `${base} piano-key-active` : base
 }
 
-export function PianoKeyboard({ activeNotes, roles, tensions = [], avoids = [], marks }: PianoKeyboardProps) {
+export function PianoKeyboard({ activeNotes, roles, tensions = [], avoids = [], marks, heat }: PianoKeyboardProps) {
   const tensionChromas = useMemo(
     () => new Set(tensions.map((n) => Note.chroma(n)).filter((c): c is number => c !== undefined)),
     [tensions],
@@ -94,10 +113,12 @@ export function PianoKeyboard({ activeNotes, roles, tensions = [], avoids = [], 
           const isTension = tensionChromas.has(chroma)
           const isAvoid = avoidChromas.has(chroma)
           const mark = marks?.get(k.midi)
+          const missed = heat?.get(k.midi)
           return (
             <div
               key={k.midi}
               className={keyClassName('piano-key piano-key-white', velocity !== undefined, mark)}
+              title={heatTitle(missed)}
               style={{
                 left: k.x,
                 width: WHITE_W,
@@ -106,6 +127,7 @@ export function PianoKeyboard({ activeNotes, roles, tensions = [], avoids = [], 
                   !marks && {
                     backgroundColor: activeWhiteColor(velocity),
                   }),
+                ...(missed && !mark && { backgroundColor: heatWhiteColor(missed.level) }),
               }}
             >
               {(isTension || isAvoid) && (
@@ -127,10 +149,12 @@ export function PianoKeyboard({ activeNotes, roles, tensions = [], avoids = [], 
           const isTension = tensionChromas.has(chroma)
           const isAvoid = avoidChromas.has(chroma)
           const mark = marks?.get(k.midi)
+          const missed = heat?.get(k.midi)
           return (
             <div
               key={k.midi}
               className={keyClassName('piano-key piano-key-black', velocity !== undefined, mark)}
+              title={heatTitle(missed)}
               style={{
                 left: k.x,
                 width: BLACK_W,
@@ -139,6 +163,7 @@ export function PianoKeyboard({ activeNotes, roles, tensions = [], avoids = [], 
                   !marks && {
                     backgroundColor: activeBlackColor(velocity),
                   }),
+                ...(missed && !mark && { backgroundColor: heatBlackColor(missed.level) }),
               }}
             >
               {(isTension || isAvoid) && (

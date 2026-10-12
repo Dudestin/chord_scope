@@ -21,11 +21,18 @@ export interface ResultItem {
   missed: boolean
 }
 
+export interface ResultKey {
+  midi: number
+  missed: boolean
+}
+
 export interface StepResult {
   drill: DrillKind
   outcome: Outcome
   ms: number | null
   items: ResultItem[]
+  // The keys a staff step asked for; a chord symbol asks for none in particular.
+  keys: ResultKey[]
   // One entry per wrong key: what kind of mistake it was.
   slips: SlipKind[]
 }
@@ -199,6 +206,14 @@ function resultItems(
   }))
 }
 
+// The keys of a staff step, blamed like its items. A cadence chord is tracked
+// as one item, but its keys are still hit or missed one by one.
+function resultKeys(step: Step, wrong: number[], allMissed: boolean): ResultKey[] {
+  if (step.kind === 'symbol') return []
+  const blamed = new Set(wrong.map((note) => nearestTarget(step.notes, note).midi))
+  return step.notes.map(({ midi }) => ({ midi, missed: allMissed || blamed.has(midi) }))
+}
+
 // A wrong key on a staff is read against the target it landed closest to, in
 // the key of its measure and with the other staff's clef in mind.
 function slipOf(step: Step, config: PracticeConfig, key: string, note: number): SlipKind {
@@ -216,13 +231,13 @@ function blameLast(
 ): StepResult[] {
   const last = log[log.length - 1]
   if (!last) return log
-  const blamed =
-    chordLabel(step) ??
-    (step.kind === 'notes' ? itemKey(nearestTarget(step.notes, note), config) : null)
+  const target = step.kind === 'notes' ? nearestTarget(step.notes, note) : null
+  const blamed = chordLabel(step) ?? (target && itemKey(target, config))
   const amended: StepResult = {
     ...last,
     outcome: last.outcome === 'clean' ? 'missed' : last.outcome,
     items: last.items.map((item) => (item.key === blamed ? { ...item, missed: true } : item)),
+    keys: last.keys.map((asked) => (asked.midi === target?.midi ? { ...asked, missed: true } : asked)),
     slips: [...last.slips, slipOf(step, config, key, note)],
   }
   return [...log.slice(0, -1), amended]
@@ -235,16 +250,13 @@ function finishStep(state: SessionState, time: number | null, left = false): Ses
   const stepKey = state.keys[state.position.measure]
   const skipped = time === null && !left
   const outcome: Outcome = skipped ? 'skipped' : state.stepWrong.length === 0 ? 'clean' : 'missed'
+  const allMissed = skipped || state.stepWrong.length >= HINT_AFTER_MISSES
   const result: StepResult = {
     drill: state.config.drill,
     outcome,
     ms: time !== null && state.startedAt !== null ? time - state.startedAt : null,
-    items: resultItems(
-      step,
-      state.config,
-      state.stepWrong,
-      skipped || state.stepWrong.length >= HINT_AFTER_MISSES,
-    ),
+    items: resultItems(step, state.config, state.stepWrong, allMissed),
+    keys: resultKeys(step, state.stepWrong, allMissed),
     slips: state.stepWrong.map((note) => slipOf(step, state.config, stepKey, note)),
   }
   const next: SessionState = {

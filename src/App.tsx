@@ -418,6 +418,7 @@ function App() {
               activeNotes={activeNotes}
               roles={practice.prompt ? roles : NO_ROLES}
               marks={practice.marks}
+              heat={practice.heat}
             />
             {practice.prompt && (
               <ChordInfo

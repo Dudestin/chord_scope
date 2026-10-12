@@ -10,6 +10,11 @@ const WEAK_LIMIT = 5
 const SLOW_FACTOR = 1.5
 // A missed item stays in focus until it has been played clean this often in a row.
 const CLEAR_AFTER = 3
+// Clean plays every key is credited with before it is shaded, so that one slip
+// on a key asked for once does not look like a key missed every time.
+const HEAT_PRIOR = 3
+// The share of misses, counted that way, at which a key is as dark as it gets.
+const HEAT_FULL = 0.5
 
 export interface WeakItem {
   key: string
@@ -23,6 +28,13 @@ export interface WeakItem {
 export interface SlipCount {
   kind: SlipKind
   count: number
+}
+
+export interface KeyHeat {
+  attempts: number
+  missed: number
+  // 0–1: how dark the key is drawn.
+  level: number
 }
 
 export interface PracticeStats {
@@ -109,4 +121,27 @@ export function focusItems(log: StepResult[], drill: DrillKind): Set<string> {
     }
   }
   return new Set([...cleanSince].filter(([, clean]) => clean < CLEAR_AFTER).map(([key]) => key))
+}
+
+// The keys that have been missed in one drill, by how often for the times they
+// were asked for. A key that was never missed is not in the map.
+export function keyHeat(log: StepResult[], drill: DrillKind): Map<number, KeyHeat> {
+  const counts = new Map<number, { attempts: number; missed: number }>()
+  for (const result of log) {
+    if (result.drill !== drill) continue
+    for (const { midi, missed } of result.keys) {
+      const count = counts.get(midi) ?? { attempts: 0, missed: 0 }
+      count.attempts++
+      if (missed) count.missed++
+      counts.set(midi, count)
+    }
+  }
+
+  const heat = new Map<number, KeyHeat>()
+  for (const [midi, { attempts, missed }] of counts) {
+    if (missed === 0) continue
+    const level = Math.min(1, missed / (attempts + HEAT_PRIOR) / HEAT_FULL)
+    heat.set(midi, { attempts, missed, level })
+  }
+  return heat
 }
