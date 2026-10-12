@@ -66,8 +66,10 @@ export type Step =
   | { kind: 'symbol'; symbol: string; chromas: number[] }
 
 const LETTERS = 'CDEFGAB'
-const SHARPENED = 'CDFGA'
-const FLATTENED = 'DEGAB'
+// Scale degrees (0 = tonic) an accidental may raise or lower. The ones left
+// out would land on the scale tone next door: E# or Cb in C major.
+const RAISED_DEGREES = [0, 1, 3, 4, 5]
+const LOWERED_DEGREES = [1, 2, 4, 5, 6]
 
 const ALTER_CHANCE = 0.15
 const CHORD_ALTER_CHANCE = 0.25
@@ -172,13 +174,22 @@ function noteAt(position: number, accidental: string, staff: StaffName): TargetN
   return { midi: Note.midi(name) ?? 0, name, staff }
 }
 
-// A letter the key signature alters becomes natural; a natural one takes a
-// sharp or flat that never spells E#, B#, Cb or Fb.
-function alteredAccidental(rng: Rng, letter: string, inKey: string): string {
-  if (inKey !== '') return ''
+// A semitone up or down from what the key signature gives a letter: a flat is
+// raised to a natural, a sharp to a double sharp.
+function sharpen(accidental: string): string {
+  return accidental === 'b' ? '' : `${accidental}#`
+}
+
+function flatten(accidental: string): string {
+  return accidental === '#' ? '' : `${accidental}b`
+}
+
+// An accidental is spelled the way its key would write it, by scale degree:
+// Eb major raises its fourth to A natural and lowers its sixth to Cb.
+function alteredAccidental(rng: Rng, degree: number, inKey: string): string {
   const options = []
-  if (SHARPENED.includes(letter)) options.push('#')
-  if (FLATTENED.includes(letter)) options.push('b')
+  if (RAISED_DEGREES.includes(degree)) options.push(sharpen(inKey))
+  if (LOWERED_DEGREES.includes(degree)) options.push(flatten(inKey))
   return pick(rng, options)
 }
 
@@ -239,12 +250,10 @@ function handsFit(top: TargetNote, bottom: TargetNote, attempt: number): boolean
   return attempt > HAND_ATTEMPTS ? gap !== 0 : gap >= MIN_HAND_GAP
 }
 
-function isAscending(notes: TargetNote[]): boolean {
-  return notes.every((note, i) => i === 0 || note.midi > notes[i - 1].midi)
-}
-
 function staffSteps(config: PracticeConfig, rng: Rng, slot: number, prev: Step[] | null): Step[] {
   const inKey = keyAccidentals(config.keySpec)
+  // Staff drills only read the key signature, so degrees count from the major tonic.
+  const tonic = LETTERS.indexOf(config.keySpec[0])
   const ranges: Record<StaffName, [number, number]> = {
     top: staffRange(config.topClef, config.ledger),
     bottom: staffRange(config.bottomClef, config.ledger),
@@ -261,7 +270,7 @@ function staffSteps(config: PracticeConfig, rng: Rng, slot: number, prev: Step[]
     const accidental = inKey[position % 7]
     return noteAt(
       position,
-      alter ? alteredAccidental(rng, LETTERS[position % 7], accidental) : accidental,
+      alter ? alteredAccidental(rng, (position - tonic + 7) % 7, accidental) : accidental,
       staff,
     )
   }
@@ -292,15 +301,10 @@ function staffSteps(config: PracticeConfig, rng: Rng, slot: number, prev: Step[]
       const root = nextPosition(rng, walkers[solo], low, high - shape[shape.length - 1], config.leap)
       moveTo(walkers[solo], root)
 
-      let notes = shape.map((offset) => spell(root + offset, solo, false))
-      if (wantsAlter(CHORD_ALTER_CHANCE)) {
-        const index = Math.floor(rng.next() * notes.length)
-        const altered = notes.map((note, i) =>
-          i === index ? spell(root + shape[i], solo, true) : note,
-        )
-        // Flattening G above F# (or the like) would put two noteheads on one key.
-        if (isAscending(altered)) notes = altered
-      }
+      // One altered note at most. It never lands on the scale tone next to
+      // it, so every notehead of the chord keeps a key of its own.
+      const altered = wantsAlter(CHORD_ALTER_CHANCE) ? Math.floor(rng.next() * shape.length) : -1
+      const notes = shape.map((offset, i) => spell(root + offset, solo, i === altered))
       return { kind: 'notes', notes }
     }
 
@@ -348,7 +352,7 @@ function cadenceSteps(config: PracticeConfig, rng: Rng): Step[] {
       const position = tonic + offset
       const accidental = inKey[position % 7]
       const raised = config.minor && chord === 'V7' && (offset + 7) % 7 === LEADING_TONE
-      return noteAt(position, raised ? (accidental === 'b' ? '' : `${accidental}#`) : accidental, 'top')
+      return noteAt(position, raised ? sharpen(accidental) : accidental, 'top')
     })
     const lower = noteAt(bassTonic + bass, inKey[(bassTonic + bass) % 7], 'bottom')
     return {
