@@ -27,6 +27,10 @@ npm run dev -- --host
 
 ブラウザで `http://localhost:5173` を開き、MIDIアクセスを許可する。Web MIDI APIに対応した Chrome / Edge / Firefox で動作する。
 
+## デプロイ
+
+`master` に push すると、GitHub Actions (`.github/workflows/deploy.yml`) が lint とビルドを行い、`dist/` を GitHub Pages に公開する。アセットは相対パスで参照しているので (`vite.config.ts` の `base: './'`)、リポジトリ名のサブパスでもそのまま動く。
+
 ## 技術スタック
 
 - Vite + React + TypeScript
