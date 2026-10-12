@@ -5,6 +5,7 @@ import { ChordPrompt } from './components/ChordPrompt'
 import { CircleOfFifths } from './components/CircleOfFifths'
 import { NoteInfo } from './components/NoteInfo'
 import { PianoKeyboard } from './components/PianoKeyboard'
+import { PracticeChart } from './components/PracticeChart'
 import { PracticeSettings } from './components/PracticeSettings'
 import { PracticeStaff } from './components/PracticeStaff'
 import { PracticeStats } from './components/PracticeStats'
@@ -408,39 +409,44 @@ function App() {
         ) : (
           <>
             {practice.staff && <PracticeStaff model={practice.staff} />}
-            {practice.prompt && <ChordPrompt model={practice.prompt} />}
-            <PracticeStats
-              stats={practice.stats}
-              onSkip={practice.skip}
-              onReset={practice.resetStats}
-            />
-            <PianoKeyboard
-              activeNotes={activeNotes}
-              roles={practice.prompt ? roles : NO_ROLES}
-              marks={practice.marks}
-              heat={practice.heat}
-            />
-            {practice.prompt && (
-              <ChordInfo
-                chord={chord}
-                notes={notes}
-                noteCount={notes.length}
-                roles={roles}
-                romanNumeral={romanNumeral}
-              />
-            )}
-            <div className="staff-row">
-              {keySelector}
-              <div className="clef-controls practice-controls">
-                <PracticeSettings
-                  value={practiceSettings}
-                  onChange={(next) => {
-                    keepShownKey()
-                    setPracticeSettings(next)
-                  }}
+            <div className="practice-body">
+              <div className="practice-main">
+                {practice.prompt && <ChordPrompt model={practice.prompt} />}
+                <PracticeStats
+                  stats={practice.stats}
+                  onSkip={practice.skip}
+                  onReset={practice.resetStats}
                 />
-                {practice.staff && clefSelects}
-                <KeyboardHints />
+                <PianoKeyboard
+                  activeNotes={activeNotes}
+                  roles={practice.prompt ? roles : NO_ROLES}
+                  marks={practice.marks}
+                  heat={practice.heat}
+                />
+                {practice.prompt && (
+                  <ChordInfo
+                    chord={chord}
+                    notes={notes}
+                    noteCount={notes.length}
+                    roles={roles}
+                    romanNumeral={romanNumeral}
+                  />
+                )}
+                <PracticeChart timeline={practice.timeline} drill={practiceSettings.drill} />
+              </div>
+              <div className="staff-row practice-side">
+                {keySelector}
+                <div className="clef-controls practice-controls">
+                  <PracticeSettings
+                    value={practiceSettings}
+                    onChange={(next) => {
+                      keepShownKey()
+                      setPracticeSettings(next)
+                    }}
+                  />
+                  {practice.staff && clefSelects}
+                  <KeyboardHints />
+                </div>
               </div>
             </div>
           </>

@@ -15,6 +15,10 @@ const CLEAR_AFTER = 3
 const HEAT_PRIOR = 3
 // The share of misses, counted that way, at which a key is as dark as it gets.
 const HEAT_FULL = 0.5
+// How far back the chart's two lines look: the speed over enough steps to show
+// a trend, the raw pace over few enough to show a single hesitation.
+const SPEED_WINDOW = 12
+const RAW_WINDOW = 3
 
 export interface WeakItem {
   key: string
@@ -35,6 +39,16 @@ export interface KeyHeat {
   missed: number
   // 0–1: how dark the key is drawn.
   level: number
+}
+
+// One step of a drill as the chart draws it.
+export interface TimelinePoint {
+  // Steps per minute got right the first time; null until a step has been timed.
+  speed: number | null
+  // Steps per minute, right or wrong.
+  raw: number | null
+  // Wrong keys on the step. A step skipped without any still counts as one.
+  errors: number
 }
 
 export interface PracticeStats {
@@ -144,4 +158,40 @@ export function keyHeat(log: StepResult[], drill: DrillKind): Map<number, KeyHea
     heat.set(midi, { attempts, missed, level })
   }
   return heat
+}
+
+// A step's time counts towards the pace whether it was right or not: putting a
+// slip right is time spent. Being away is not.
+function paceTime(result: StepResult): number | null {
+  return result.ms !== null && result.ms > 0 && result.ms <= IDLE_MS ? result.ms : null
+}
+
+function perMinute(times: number[], count: number): number | null {
+  const recent = times.slice(-count)
+  if (recent.length === 0) return null
+  return (60000 * recent.length) / recent.reduce((sum, ms) => sum + ms, 0)
+}
+
+// The session step by step, for one drill. `raw` is the pace of the last
+// RAW_WINDOW timed steps; `speed` is the pace of the last SPEED_WINDOW of them
+// times the share of the last SPEED_WINDOW steps that were clean, so a slip
+// costs speed even when it was played through and left no time behind.
+export function computeTimeline(log: StepResult[], drill: DrillKind): TimelinePoint[] {
+  const results = log.filter((result) => result.drill === drill)
+  const times: number[] = []
+  const points: TimelinePoint[] = []
+
+  for (const [index, result] of results.entries()) {
+    const time = paceTime(result)
+    if (time !== null) times.push(time)
+    const recent = results.slice(Math.max(0, index + 1 - SPEED_WINDOW), index + 1)
+    const clean = recent.filter(({ outcome }) => outcome === 'clean').length
+    const pace = perMinute(times, SPEED_WINDOW)
+    points.push({
+      speed: pace === null ? null : (pace * clean) / recent.length,
+      raw: perMinute(times, RAW_WINDOW),
+      errors: result.outcome === 'skipped' ? Math.max(1, result.slips.length) : result.slips.length,
+    })
+  }
+  return points
 }

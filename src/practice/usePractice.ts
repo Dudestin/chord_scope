@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useReducer } from 'react'
 import type { MidiState } from '../midi/useMidi'
 import type { PracticeConfig } from './generate'
 import { initSession, sessionReducer } from './session'
-import { computeStats, keyHeat } from './stats'
-import type { KeyHeat, PracticeStats } from './stats'
+import { computeStats, computeTimeline, keyHeat } from './stats'
+import type { KeyHeat, PracticeStats, TimelinePoint } from './stats'
 import { currentKey, selectKeyMarks, selectPromptModel, selectStaffModel } from './view'
 import type { KeyMark, PromptModel, StaffModel } from './view'
 
@@ -14,6 +14,8 @@ export interface Practice {
   // Keys missed in the current drill, for shading the keyboard.
   heat: Map<number, KeyHeat>
   stats: PracticeStats
+  // Speed and wrong keys, step by step, for the chart.
+  timeline: TimelinePoint[]
   // Key of the measure being played; moves on its own while cadences cycle.
   keySpec: string
   skip: () => void
@@ -67,6 +69,10 @@ export function usePractice(
     () => keyHeat(session.log, session.config.drill),
     [session.log, session.config.drill],
   )
+  const timeline = useMemo(
+    () => computeTimeline(session.log, session.config.drill),
+    [session.log, session.config.drill],
+  )
   const skip = useCallback(() => dispatch({ type: 'skip' }), [])
   const resetStats = useCallback(() => dispatch({ type: 'resetStats' }), [])
 
@@ -74,5 +80,5 @@ export function usePractice(
   // answering with the config's own key keeps the selector from lagging a render.
   const keySpec = session.config === config ? currentKey(session) : config.keySpec
 
-  return { staff, prompt, marks, heat, stats, keySpec, skip, resetStats }
+  return { staff, prompt, marks, heat, stats, timeline, keySpec, skip, resetStats }
 }

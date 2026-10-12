@@ -105,7 +105,7 @@ main {
   width: 100%;
 }
 
-main > :not(.practice-staff) {
+main > :not(.practice-staff, .practice-body) {
   max-width: min(100%, var(--column));
 }
 
@@ -521,6 +521,44 @@ main > :not(.practice-staff) {
    has been played, amber for a slip, red for a wrong key, green for a right
    key that is down. */
 
+/* Under the score: the page's column, with the key and the settings on its
+   left once the window has room for both (the two, their gap and the app's
+   padding, with a scrollbar to spare). The column comes first in the
+   document, so on a narrower window the settings follow it in a row of
+   their own. */
+.practice-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.practice-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: var(--column);
+  max-width: 100%;
+}
+
+@media (min-width: 1080px) {
+  .practice-body {
+    flex-direction: row-reverse;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 32px;
+  }
+
+  .practice-side {
+    flex: none;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 16px;
+  }
+}
+
 .practice-controls {
   width: 300px;
   max-width: 100%;
@@ -765,4 +803,181 @@ main > :not(.practice-staff) {
 .piano-key-black.piano-key-hint {
   background: #a855f7;
   border-color: #7e22ce;
+}
+
+/* Speed over the session. One hue and a grey: the line that matters and the
+   one it is read against. Red is kept for wrong keys, which have a lane of
+   their own under the plot. The chart sits on the page, so these are themed. */
+.practice-chart {
+  --chart-speed: var(--accent);
+  --chart-raw: #8e8a96;
+  --chart-error: #dc2626;
+  box-sizing: border-box;
+  width: 680px;
+  max-width: 100%;
+}
+
+:root[data-theme='dark'] .practice-chart {
+  --chart-speed: #b26cf8;
+  --chart-raw: #737987;
+  --chart-error: #ef4444;
+}
+
+.practice-chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.practice-chart-legend {
+  display: flex;
+  gap: 14px;
+}
+
+.practice-chart-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* A stroke for a line, a bar for the bars. */
+.practice-chart-key {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.practice-chart-key-speed {
+  background: var(--chart-speed);
+}
+
+.practice-chart-key-raw {
+  background: var(--chart-raw);
+}
+
+.practice-chart-key-error {
+  width: 4px;
+  height: 10px;
+  background: var(--chart-error);
+}
+
+.practice-chart-plot {
+  position: relative;
+}
+
+.practice-chart-plot svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.practice-chart-grid,
+.practice-chart-crosshair {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.practice-chart-crosshair {
+  stroke: var(--text);
+}
+
+.practice-chart-tick,
+.practice-chart-empty {
+  font-size: 11px;
+  fill: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.practice-chart-empty {
+  font-size: 13px;
+}
+
+.practice-chart-figure {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--text-h);
+}
+
+.practice-chart-speed,
+.practice-chart-raw {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.practice-chart-speed {
+  stroke: var(--chart-speed);
+}
+
+/* Thinner: it is what the speed is read against, and the busier of the two. */
+.practice-chart-raw {
+  stroke: var(--chart-raw);
+  stroke-width: 1.5;
+}
+
+.practice-chart-raw-area {
+  fill: var(--chart-raw);
+  opacity: 0.1;
+}
+
+.practice-chart-error {
+  fill: var(--chart-error);
+}
+
+/* The ring keeps a dot apart from the line it sits on. */
+.practice-chart-dot {
+  stroke: var(--bg);
+  stroke-width: 2;
+}
+
+.practice-chart-dot-speed {
+  fill: var(--chart-speed);
+}
+
+.practice-chart-dot-raw {
+  fill: var(--chart-raw);
+}
+
+.practice-chart-tooltip {
+  position: absolute;
+  top: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: auto auto auto;
+  align-items: center;
+  gap: 2px 8px;
+  margin-left: 12px;
+  padding: 7px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(8, 6, 13, 0.12);
+  pointer-events: none;
+}
+
+.practice-chart-tooltip-left {
+  margin-left: -12px;
+  transform: translateX(-100%);
+}
+
+.practice-chart-tooltip-title {
+  grid-column: 1 / -1;
+}
+
+.practice-chart-tooltip b {
+  font-weight: 600;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
