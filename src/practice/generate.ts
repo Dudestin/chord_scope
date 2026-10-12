@@ -5,9 +5,10 @@ import type { ClefName } from '../theory/clefs'
 export const MEASURES = 2
 export const STEPS_PER_MEASURE = 4
 
-export type DrillKind = 'notes' | 'hands' | 'chords' | 'symbols'
+export type DrillKind = 'notes' | 'hands' | 'chords' | 'symbols' | 'cadence'
 export type StaffName = 'top' | 'bottom'
 export type ChordPool = 'triads' | 'sevenths' | 'mixed'
+export type CadenceKind = 'basic' | 'sixFour'
 
 export interface PracticeSettings {
   drill: DrillKind
@@ -20,6 +21,11 @@ export interface PracticeSettings {
   chordSize: number
   pool: ChordPool
   accidentals: boolean
+  cadence: CadenceKind
+  // Inversion the right hand starts a cadence in (0–2); 3 varies it.
+  inversion: number
+  // Move one key round the circle of fifths after every cadence.
+  cycleKeys: boolean
 }
 
 export const DEFAULT_SETTINGS: PracticeSettings = {
@@ -30,10 +36,15 @@ export const DEFAULT_SETTINGS: PracticeSettings = {
   chordSize: 3,
   pool: 'sevenths',
   accidentals: false,
+  cadence: 'basic',
+  inversion: 0,
+  cycleKeys: false,
 }
 
 export interface PracticeConfig extends PracticeSettings {
   keySpec: string
+  // Cadences follow the relative minor of the key signature.
+  minor: boolean
   topClef: ClefName
   bottomClef: ClefName
 }
@@ -44,8 +55,14 @@ export interface TargetNote {
   staff: StaffName
 }
 
+// A cadence chord: its roman numeral and the key it is heard in ('Eb', 'Cm').
+export interface ChordFunction {
+  numeral: string
+  key: string
+}
+
 export type Step =
-  | { kind: 'notes'; notes: TargetNote[] }
+  | { kind: 'notes'; notes: TargetNote[]; chord?: ChordFunction }
   | { kind: 'symbol'; symbol: string; chromas: number[] }
 
 const LETTERS = 'CDEFGAB'
@@ -70,6 +87,40 @@ const CHORD_SHAPES: Record<number, number[][]> = {
   3: [[0, 2, 4], [0, 2, 5], [0, 3, 5]],
   4: [[0, 2, 4, 6], [0, 2, 4, 5], [0, 2, 3, 5], [0, 1, 3, 5]],
 }
+
+// Right-hand shapes as diatonic offsets from the tonic, one set per starting
+// inversion. Each chord keeps the tones it shares with the one before and
+// moves the others by step; V7 leaves out its fifth.
+const CADENCE_SHAPES = [
+  { I: [0, 2, 4], IV: [0, 3, 5], V7: [-1, 3, 4] },
+  { I: [2, 4, 7], IV: [3, 5, 7], V7: [3, 4, 6] },
+  { I: [4, 7, 9], IV: [5, 7, 10], V7: [4, 6, 10] },
+]
+
+type CadenceChord = keyof (typeof CADENCE_SHAPES)[number]
+
+// `bass` is the left hand's scale degree as an offset from the tonic.
+const CADENCES: Record<CadenceKind, { chord: CadenceChord; bass: number; numeral: string }[]> = {
+  basic: [
+    { chord: 'I', bass: 0, numeral: 'I' },
+    { chord: 'IV', bass: 3, numeral: 'IV' },
+    { chord: 'V7', bass: 4, numeral: 'V7' },
+    { chord: 'I', bass: 0, numeral: 'I' },
+  ],
+  sixFour: [
+    { chord: 'I', bass: 0, numeral: 'I' },
+    { chord: 'IV', bass: 3, numeral: 'IV' },
+    { chord: 'I', bass: 4, numeral: 'I6/4' },
+    { chord: 'V7', bass: 4, numeral: 'V7' },
+    { chord: 'I', bass: 0, numeral: 'I' },
+  ],
+}
+
+const LEADING_TONE = 6
+// The bass moves between the tonic and the fifth above it.
+const BASS_SPAN = 4
+// The right hand sits a little below the middle of its staff, close to the left.
+const RIGHT_HAND_DROP = 2
 
 interface Rng {
   next: () => number
@@ -259,6 +310,55 @@ function staffSteps(config: PracticeConfig, rng: Rng, slot: number, prev: Step[]
   })
 }
 
+// The octave that puts a shape spanning `low`..`high` (offsets from the tonic)
+// closest to `centre`.
+function tonicNear(letter: number, low: number, high: number, centre: number): number {
+  const octave = Math.round((centre - (low + high) / 2 - letter) / 7)
+  return octave * 7 + letter
+}
+
+// Keyboard-style cadence: three-note chords in the right hand over the bass
+// note in the left. Minor keys take the harmonic form, so V7 gets a raised
+// leading tone.
+function cadenceSteps(config: PracticeConfig, rng: Rng): Step[] {
+  const inKey = keyAccidentals(config.keySpec)
+  const major = LETTERS.indexOf(config.keySpec[0])
+  const letter = config.minor ? (major + 5) % 7 : major
+  const key = `${LETTERS[letter]}${inKey[letter]}${config.minor ? 'm' : ''}`
+
+  const shapes = CADENCE_SHAPES[config.inversion] ?? pick(rng, CADENCE_SHAPES)
+  const offsets = Object.values(shapes).flat()
+  const low = Math.min(...offsets)
+  const high = Math.max(...offsets)
+  const upperCentre = CLEF_MIDDLE_LINE[config.topClef] - RIGHT_HAND_DROP
+  const lowerCentre = CLEF_MIDDLE_LINE[config.bottomClef]
+  let tonic = tonicNear(letter, low, high, upperCentre)
+  let bassTonic = tonicNear(letter, 0, BASS_SPAN, lowerCentre)
+  // Where the hands would overlap, move apart whichever strays least from its
+  // staff; on a near tie the right hand goes up, which keeps the bass in its staff.
+  while (bassTonic + BASS_SPAN >= tonic + low) {
+    const raised = Math.abs(tonic + 7 + (low + high) / 2 - upperCentre)
+    const lowered = Math.abs(bassTonic - 7 + BASS_SPAN / 2 - lowerCentre)
+    if (raised <= lowered + 1) tonic += 7
+    else bassTonic -= 7
+  }
+
+  return CADENCES[config.cadence].map(({ chord, bass, numeral }): Step => {
+    const upper = shapes[chord].map((offset) => {
+      const position = tonic + offset
+      const accidental = inKey[position % 7]
+      const raised = config.minor && chord === 'V7' && (offset + 7) % 7 === LEADING_TONE
+      return noteAt(position, raised ? (accidental === 'b' ? '' : `${accidental}#`) : accidental, 'top')
+    })
+    const lower = noteAt(bassTonic + bass, inKey[(bassTonic + bass) % 7], 'bottom')
+    return {
+      kind: 'notes',
+      notes: [lower, ...upper],
+      chord: { numeral: config.minor && chord !== 'V7' ? numeral.toLowerCase() : numeral, key },
+    }
+  })
+}
+
 interface PoolChord {
   symbol: string
   // Scale degree of the root (0 = tonic), used to resolve down a fifth.
@@ -300,17 +400,23 @@ function symbolSteps(config: PracticeConfig, rng: Rng, prev: Step[] | null): Ste
   })
 }
 
+// `keySpec` lets a measure sit in another key than the one the session started
+// in, which is how cadences travel round the circle of fifths.
 export function generateMeasure(
   config: PracticeConfig,
   seed: number,
   slot: number,
   prev: Step[] | null,
+  keySpec: string = config.keySpec,
 ): { steps: Step[]; seed: number } {
   const rng = createRng(seed)
+  const local = keySpec === config.keySpec ? config : { ...config, keySpec }
   const steps =
-    config.drill === 'symbols'
-      ? symbolSteps(config, rng, prev)
-      : staffSteps(config, rng, slot, prev)
+    local.drill === 'symbols'
+      ? symbolSteps(local, rng, prev)
+      : local.drill === 'cadence'
+        ? cadenceSteps(local, rng)
+        : staffSteps(local, rng, slot, prev)
   return { steps, seed: rng.state() }
 }
 

@@ -4,7 +4,7 @@ import type { PracticeConfig } from './generate'
 import { initSession, sessionReducer } from './session'
 import { computeStats } from './stats'
 import type { PracticeStats } from './stats'
-import { selectKeyMarks, selectPromptModel, selectStaffModel } from './view'
+import { currentKey, selectKeyMarks, selectPromptModel, selectStaffModel } from './view'
 import type { KeyMark, PromptModel, StaffModel } from './view'
 
 export interface Practice {
@@ -12,6 +12,8 @@ export interface Practice {
   prompt: PromptModel | null
   marks: Map<number, KeyMark>
   stats: PracticeStats
+  // Key of the measure being played; moves on its own while cadences cycle.
+  keySpec: string
   skip: () => void
   resetStats: () => void
 }
@@ -62,5 +64,9 @@ export function usePractice(
   const skip = useCallback(() => dispatch({ type: 'skip' }), [])
   const resetStats = useCallback(() => dispatch({ type: 'resetStats' }), [])
 
-  return { staff, prompt, marks, stats, skip, resetStats }
+  // Until the session has taken up a new config it still holds the old key;
+  // answering with the config's own key keeps the selector from lagging a render.
+  const keySpec = session.config === config ? currentKey(session) : config.keySpec
+
+  return { staff, prompt, marks, stats, keySpec, skip, resetStats }
 }

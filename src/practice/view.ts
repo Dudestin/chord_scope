@@ -17,13 +17,21 @@ export interface StaffStep {
   status: StepStatus
   top: StaffKey[]
   bottom: StaffKey[]
+  // Roman numeral written under a cadence chord.
+  numeral?: string
+}
+
+export interface StaffMeasure {
+  keySignature: string
+  // Name of the key, shown above a cadence ('Eb', 'Cm').
+  keyName?: string
+  steps: StaffStep[]
 }
 
 export interface StaffModel {
-  keySignature: string
   topClef: ClefName
   bottomClef: ClefName
-  measures: StaffStep[][]
+  measures: StaffMeasure[]
   cursor: Position
   // The step under the cursor has already been missed.
   flawed: boolean
@@ -57,6 +65,10 @@ function statusAt(state: SessionState, measure: number, step: number): StepStatu
     : 'pending'
 }
 
+export function currentKey(state: SessionState): string {
+  return state.keys[state.position.measure]
+}
+
 function wrongOnStaff(state: SessionState): Record<StaffName, string[]> {
   const wrong: Record<StaffName, string[]> = { top: [], bottom: [] }
   const step = currentStep(state)
@@ -64,7 +76,7 @@ function wrongOnStaff(state: SessionState): Record<StaffName, string[]> {
 
   for (const midi of [...state.wrongShown].sort((a, b) => a - b)) {
     const { staff } = nearestTarget(step.notes, midi)
-    const name = spellForStaff(midi, state.config.keySpec)
+    const name = spellForStaff(midi, currentKey(state))
     const clef = staff === 'top' ? state.config.topClef : state.config.bottomClef
     if (Math.abs(staffLine(name, clef) - 3) <= MAX_WRONG_DISTANCE) wrong[staff].push(name)
   }
@@ -76,24 +88,33 @@ export function selectStaffModel(state: SessionState): StaffModel | null {
   const { measure: cursorMeasure, step: cursorStep } = state.position
 
   return {
-    keySignature: state.config.keySpec,
     topClef: state.config.topClef,
     bottomClef: state.config.bottomClef,
-    measures: state.measures.map((steps, measure) =>
-      steps.map((step, index) => {
-        const underCursor = measure === cursorMeasure && index === cursorStep
-        const keys = (staff: StaffName): StaffKey[] =>
-          step.kind === 'notes'
-            ? step.notes
-                .filter((note) => note.staff === staff)
-                .map((note) => ({
-                  name: note.name,
-                  down: underCursor && state.held.includes(note.midi),
-                }))
-            : []
-        return { status: statusAt(state, measure, index), top: keys('top'), bottom: keys('bottom') }
-      }),
-    ),
+    measures: state.measures.map((steps, measure) => {
+      const first = steps[0]
+      return {
+        keySignature: state.keys[measure],
+        keyName: first?.kind === 'notes' ? first.chord?.key : undefined,
+        steps: steps.map((step, index) => {
+          const underCursor = measure === cursorMeasure && index === cursorStep
+          const keys = (staff: StaffName): StaffKey[] =>
+            step.kind === 'notes'
+              ? step.notes
+                  .filter((note) => note.staff === staff)
+                  .map((note) => ({
+                    name: note.name,
+                    down: underCursor && state.held.includes(note.midi),
+                  }))
+              : []
+          return {
+            status: statusAt(state, measure, index),
+            top: keys('top'),
+            bottom: keys('bottom'),
+            numeral: step.kind === 'notes' ? step.chord?.numeral : undefined,
+          }
+        }),
+      }
+    }),
     cursor: state.position,
     flawed: state.stepWrong.length > 0,
     wrong: wrongOnStaff(state),

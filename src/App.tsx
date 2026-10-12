@@ -231,7 +231,29 @@ function App() {
 
   // Matched by spec, not identity: re-clicking C puts a copy of its option in
   // state with the sharps/flats preference flipped.
-  const keyIndex = KEY_OPTIONS.findIndex((option) => option.spec === key.spec)
+  // Cadences follow the major/minor choice; the other drills only read the key signature.
+  const practiceMinor = practiceSettings.drill === 'cadence' && MINOR_MODES.has(mode)
+  const practiceConfig = useMemo(
+    () => ({ ...practiceSettings, keySpec: key.spec, minor: practiceMinor, topClef, bottomClef }),
+    [practiceSettings, key.spec, practiceMinor, topClef, bottomClef],
+  )
+  const practice = usePractice(subscribe, practiceConfig, view === 'practice')
+
+  // While cadences travel round the circle of fifths the exercise is ahead of
+  // the key that was picked, and the selector follows it.
+  const shownKey =
+    view === 'practice' && practice.keySpec !== key.spec
+      ? (KEY_OPTIONS.find((option) => option.spec === practice.keySpec) ?? key)
+      : key
+
+  // Anything that restarts the exercise would otherwise drop back to the key
+  // the cycle set out from.
+  const keepShownKey = () => {
+    setKey(shownKey)
+    setTonic(MINOR_MODES.has(mode) ? shownKey.minorTonic : shownKey.spec)
+  }
+
+  const keyIndex = KEY_OPTIONS.findIndex((option) => option.spec === shownKey.spec)
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -246,16 +268,17 @@ function App() {
         setKey(next)
         setTonic(MINOR_MODES.has(mode) ? next.minorTonic : next.spec)
       } else if (e.key === 'm' || e.key === 'M') {
+        setKey(shownKey)
         if (MINOR_MODES.has(mode)) {
           setMode('ionian')
-          setTonic(key.spec)
+          setTonic(shownKey.spec)
         } else {
           setMode('aeolian')
-          setTonic(key.minorTonic)
+          setTonic(shownKey.minorTonic)
         }
       }
     },
-    [key, mode, keyIndex],
+    [shownKey, mode, keyIndex],
   )
 
   useEffect(() => {
@@ -292,15 +315,9 @@ function App() {
   )
   const selectedScale = getScaleName(tonic, mode)
 
-  const practiceConfig = useMemo(
-    () => ({ ...practiceSettings, keySpec: key.spec, topClef, bottomClef }),
-    [practiceSettings, key.spec, topClef, bottomClef],
-  )
-  const practice = usePractice(subscribe, practiceConfig, view === 'practice')
-
   const keySelector = (
     <CircleOfFifths
-      value={key}
+      value={shownKey}
       mode={mode === 'aeolian' || mode === 'dorian' || mode === 'phrygian' || mode === 'locrian' ? 'minor' : 'major'}
       onChange={(newKey, clickedMode) => {
         setKey(newKey)
@@ -333,7 +350,13 @@ function App() {
     <div className="app">
       <header>
         <div className="header-row">
-          <ViewToggle view={view} onChange={setView} />
+          <ViewToggle
+            view={view}
+            onChange={(next) => {
+              keepShownKey()
+              setView(next)
+            }}
+          />
           <h1>chord_scope</h1>
           <ThemeToggle
             theme={theme}
@@ -408,7 +431,13 @@ function App() {
             <div className="staff-row">
               {keySelector}
               <div className="clef-controls practice-controls">
-                <PracticeSettings value={practiceSettings} onChange={setPracticeSettings} />
+                <PracticeSettings
+                  value={practiceSettings}
+                  onChange={(next) => {
+                    keepShownKey()
+                    setPracticeSettings(next)
+                  }}
+                />
                 {practice.staff && clefSelects}
                 <KeyboardHints />
               </div>

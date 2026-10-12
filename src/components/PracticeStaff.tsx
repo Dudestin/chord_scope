@@ -10,7 +10,7 @@ import {
   Voice,
 } from 'vexflow'
 import type { RenderContext } from 'vexflow'
-import type { StaffModel, StaffStep } from '../practice/view'
+import type { StaffMeasure, StaffModel } from '../practice/view'
 import { toVexKey } from './vexKey'
 
 interface PracticeStaffProps {
@@ -33,7 +33,14 @@ const RAIL_HEIGHT = 3
 // How far a wrong notehead sits to the right of the one it missed, in noteheads.
 const WRONG_OFFSET = 0.55
 
+// Key names sit above a cadence, roman numerals under the bass staff.
+const KEY_NAME_Y = 24
+const NUMERAL_Y = 250
+const TEXT_FONT = 'system-ui, sans-serif'
+const NUMERAL_FONT = 'Academico, Georgia, serif'
+
 const INK = {
+  pending: '#08060d',
   clean: '#9ca3af',
   missed: '#d97706',
   skipped: '#dc2626',
@@ -44,49 +51,55 @@ const CURSOR_FILL = 'rgba(170, 59, 255, 0.14)'
 const CURSOR_FILL_FLAWED = 'rgba(220, 38, 38, 0.12)'
 const RAIL_FILL = '#aa3bff'
 
-interface Measure {
+interface Measure extends StaffMeasure {
   staves: Record<StaffName, Stave>
   noteStart: number
   noteEnd: number
-  steps: StaffStep[]
 }
 
-// Width a stave spends on its barline, clef and key signature before the first note.
-function leadWidth(model: StaffModel, first: boolean): number {
-  if (!first) return new Stave(0, 0, 100, { leftBar: false }).getNoteStartX()
-  return Math.max(
-    ...[model.topClef, model.bottomClef].map((clef) =>
-      new Stave(0, 0, 100).addClef(clef).addKeySignature(model.keySignature).getNoteStartX(),
-    ),
-  )
+// A stave that knows its clef without drawing one: a key signature in a later
+// measure is placed by the clef in force.
+class ContinuedStave extends Stave {
+  useClef(clef: string): this {
+    this.clef = clef
+    return this
+  }
 }
 
-// Every measure gets the same room for notes; only the first also carries the
-// clefs and key signature.
+// The first measure opens with clef and key signature; a later one only shows
+// a signature when the key changes, cancelling the old one if nothing replaces it.
+function buildStave(model: StaffModel, index: number, name: StaffName, x: number, width: number): Stave {
+  const clef = name === 'top' ? model.topClef : model.bottomClef
+  const { keySignature } = model.measures[index]
+  const previous = model.measures[index - 1]?.keySignature
+  const stave = new ContinuedStave(x, STAVE_Y[name], width, { leftBar: index === 0 }).useClef(clef)
+  if (index === 0) {
+    stave.addClef(clef).addKeySignature(keySignature)
+  } else if (keySignature !== previous) {
+    stave.addKeySignature(keySignature, keySignature === 'C' ? previous : undefined)
+  }
+  return stave
+}
+
+// Every measure gets the same room for notes, after whatever its barline,
+// clef and key signature take up.
 function layoutMeasures(model: StaffModel, context: RenderContext): Measure[] {
-  const firstLead = leadWidth(model, true)
-  const laterLead = leadWidth(model, false)
-  const count = model.measures.length
-  const body = (WIDTH - STAVE_X - RIGHT_PAD - firstLead - laterLead * (count - 1)) / count
+  const leads = model.measures.map((_, index) =>
+    Math.max(...STAFF_NAMES.map((name) => buildStave(model, index, name, 0, 100).getNoteStartX())),
+  )
+  const body =
+    (WIDTH - STAVE_X - RIGHT_PAD - leads.reduce((sum, lead) => sum + lead, 0)) / leads.length
 
   let x = STAVE_X
-  return model.measures.map((steps, index) => {
-    const first = index === 0
-    const lead = first ? firstLead : laterLead
-    const width = lead + body
-    const noteStart = x + lead
-    const stave = (name: StaffName) => {
-      const made = new Stave(x, STAVE_Y[name], width, { leftBar: first })
-      if (first) {
-        made.addClef(name === 'top' ? model.topClef : model.bottomClef)
-        made.addKeySignature(model.keySignature)
-      }
-      // The two clefs differ in width; without this the hands would not line up.
-      return made.setNoteStartX(noteStart).setContext(context)
-    }
+  return model.measures.map((measure, index) => {
+    const width = leads[index] + body
+    const noteStart = x + leads[index]
+    // The two clefs differ in width; without this the hands would not line up.
+    const stave = (name: StaffName) =>
+      buildStave(model, index, name, x, width).setNoteStartX(noteStart).setContext(context)
     const staves = { top: stave('top'), bottom: stave('bottom') }
     x += width
-    return { staves, noteStart, noteEnd: x, steps }
+    return { ...measure, staves, noteStart, noteEnd: x }
   })
 }
 
@@ -105,7 +118,11 @@ function paint(note: StaveNote, color: string) {
   for (const modifier of note.getModifiers()) modifier.setStyle(style)
 }
 
-function buildNotes(model: StaffModel, steps: StaffStep[], name: StaffName): (StaveNote | null)[] {
+function buildNotes(
+  model: StaffModel,
+  { steps, keySignature }: StaffMeasure,
+  name: StaffName,
+): (StaveNote | null)[] {
   const clef = name === 'top' ? model.topClef : model.bottomClef
   const notes = steps.map((step) =>
     step[name].length > 0
@@ -125,7 +142,7 @@ function buildNotes(model: StaffModel, steps: StaffStep[], name: StaffName): (St
     const voice = new Voice({ numBeats: sounding.length, beatValue: 4 })
       .setStrict(false)
       .addTickables(sounding)
-    Accidental.applyAccidentals([voice], model.keySignature)
+    Accidental.applyAccidentals([voice], keySignature)
   }
 
   notes.forEach((note, index) => {
@@ -164,6 +181,33 @@ function fillRect(context: RenderContext, fill: string, x: number, y: number, wi
   context.restore()
 }
 
+function prettifyKeyName(name: string): string {
+  const minor = name.endsWith('m')
+  const tonic = (minor ? name.slice(0, -1) : name).replace('#', '♯').replace('b', '♭')
+  return `${tonic} ${minor ? 'minor' : 'major'}`
+}
+
+// Draws 'I', 'V7' or 'I6/4' centred on `centre`, the figures raised beside the
+// numeral and a six-four stacked as figured bass.
+function drawNumeral(context: RenderContext, numeral: string, centre: number, color: string) {
+  const [, base = numeral, figures = ''] = /^([ivIV]+)(.*)$/.exec(numeral) ?? []
+  const stacked = figures.split('/')
+
+  context.save()
+  context.setFillStyle(color)
+  context.setFont(NUMERAL_FONT, 10)
+  const figureWidth = Math.max(0, ...stacked.map((figure) => context.measureText(figure).width))
+  context.setFont(NUMERAL_FONT, 17)
+  const baseWidth = context.measureText(base).width
+  const left = centre - (baseWidth + figureWidth) / 2
+  context.fillText(base, left, NUMERAL_Y)
+  context.setFont(NUMERAL_FONT, 10)
+  stacked.forEach((figure, row) => {
+    context.fillText(figure, left + baseWidth + 1, NUMERAL_Y - 8 + row * 9)
+  })
+  context.restore()
+}
+
 function draw(container: HTMLDivElement, model: StaffModel) {
   container.innerHTML = ''
   const renderer = new Renderer(container, Renderer.Backends.SVG)
@@ -175,15 +219,16 @@ function draw(container: HTMLDivElement, model: StaffModel) {
 
   const measures = layoutMeasures(model, context)
   const notes: StaveNote[] = []
+  const labels: (() => void)[] = []
   let cursorHead = 0
   let cursorStaves: StaffName[] = []
 
   measures.forEach((measure, measureIndex) => {
     const rows = {
-      top: buildNotes(model, measure.steps, 'top'),
-      bottom: buildNotes(model, measure.steps, 'bottom'),
+      top: buildNotes(model, measure, 'top'),
+      bottom: buildNotes(model, measure, 'bottom'),
     }
-    measure.steps.forEach((_, stepIndex) => {
+    measure.steps.forEach((step, stepIndex) => {
       const parts = STAFF_NAMES.flatMap((name) => {
         const note = rows[name][stepIndex]
         return note ? [{ name, note, stave: measure.staves[name] }] : []
@@ -191,6 +236,11 @@ function draw(container: HTMLDivElement, model: StaffModel) {
       if (parts.length === 0) return
       const headLeft = place(parts, cellLeft(measure, stepIndex), cellWidth(measure))
       notes.push(...parts.map((part) => part.note))
+      if (step.numeral) {
+        labels.push(() =>
+          drawNumeral(context, step.numeral ?? '', headLeft + parts[0].note.getGlyphWidth() / 2, INK[step.status]),
+        )
+      }
       if (measureIndex === model.cursor.measure && stepIndex === model.cursor.step) {
         cursorHead = headLeft
         cursorStaves = parts.map((part) => part.name)
@@ -244,6 +294,16 @@ function draw(container: HTMLDivElement, model: StaffModel) {
   }
 
   for (const note of notes) note.setContext(context).drawWithStyle()
+
+  for (const measure of measures) {
+    if (!measure.keyName) continue
+    context.save()
+    context.setFillStyle(INK.pending)
+    context.setFont(TEXT_FONT, 13)
+    context.fillText(prettifyKeyName(measure.keyName), measure.noteStart + CELL_INSET, KEY_NAME_Y)
+    context.restore()
+  }
+  for (const drawLabel of labels) drawLabel()
 }
 
 export function PracticeStaff({ model }: PracticeStaffProps) {

@@ -1,4 +1,5 @@
 import type { ClefName } from '../theory/clefs'
+import { nextKeyByFifth } from '../theory/keys'
 import { generateMeasure, MEASURES } from './generate'
 import type { DrillKind, PracticeConfig, Step, TargetNote } from './generate'
 
@@ -33,6 +34,8 @@ export interface SessionState {
   config: PracticeConfig
   seed: number
   measures: Step[][]
+  // Key signature of each measure; they only differ while cadences cycle.
+  keys: string[]
   position: Position
   // Outcomes of the steps already played in the current measure.
   outcomes: Outcome[]
@@ -59,14 +62,25 @@ export type SessionAction =
   | { type: 'release' }
   | { type: 'resetStats' }
 
-function deal(config: PracticeConfig, seed: number): { measures: Step[][]; seed: number } {
+// The key of the measure played after one in `key`.
+function keyAfter(config: PracticeConfig, key: string): string {
+  return config.drill === 'cadence' && config.cycleKeys ? nextKeyByFifth(key) : config.keySpec
+}
+
+function deal(
+  config: PracticeConfig,
+  seed: number,
+): { measures: Step[][]; keys: string[]; seed: number } {
   const measures: Step[][] = []
+  const keys: string[] = []
   for (let slot = 0; slot < MEASURES; slot++) {
-    const dealt = generateMeasure(config, seed, slot, measures[slot - 1] ?? null)
+    const key = slot === 0 ? config.keySpec : keyAfter(config, keys[slot - 1])
+    const dealt = generateMeasure(config, seed, slot, measures[slot - 1] ?? null, key)
     measures.push(dealt.steps)
+    keys.push(key)
     seed = dealt.seed
   }
-  return { measures, seed }
+  return { measures, keys, seed }
 }
 
 export function initSession(config: PracticeConfig, seed: number): SessionState {
@@ -124,6 +138,13 @@ function itemKey(target: TargetNote, config: PracticeConfig): string {
   return `${target.staff === 'top' ? config.topClef : config.bottomClef}:${target.name}`
 }
 
+// What a chord is tracked as when it is read as one thing rather than note by
+// note: a chord symbol, or a cadence chord in its key.
+function chordLabel(step: Step): string | null {
+  if (step.kind === 'symbol') return step.symbol
+  return step.chord ? `${step.chord.key} ${step.chord.numeral}` : null
+}
+
 // Each wrong key counts against the target it landed closest to, which keeps
 // a slip in one hand from marking the other hand's note as weak.
 function resultItems(
@@ -132,13 +153,13 @@ function resultItems(
   wrong: number[],
   allMissed: boolean,
 ): ResultItem[] {
-  if (step.kind === 'symbol') {
-    return [
-      { key: step.symbol, label: step.symbol, clef: null, missed: allMissed || wrong.length > 0 },
-    ]
+  const label = chordLabel(step)
+  if (label !== null) {
+    return [{ key: label, label, clef: null, missed: allMissed || wrong.length > 0 }]
   }
-  const blamed = new Set(wrong.map((note) => nearestTarget(step.notes, note).midi))
-  return step.notes.map((target) => ({
+  const targets = step.kind === 'notes' ? step.notes : []
+  const blamed = new Set(wrong.map((note) => nearestTarget(targets, note).midi))
+  return targets.map((target) => ({
     key: itemKey(target, config),
     label: target.name,
     clef: target.staff === 'top' ? config.topClef : config.bottomClef,
@@ -149,7 +170,9 @@ function resultItems(
 function blameLast(log: StepResult[], step: Step, config: PracticeConfig, note: number): StepResult[] {
   const last = log[log.length - 1]
   if (!last) return log
-  const key = step.kind === 'symbol' ? step.symbol : itemKey(nearestTarget(step.notes, note), config)
+  const key =
+    chordLabel(step) ??
+    (step.kind === 'notes' ? itemKey(nearestTarget(step.notes, note), config) : null)
   const amended: StepResult = {
     ...last,
     outcome: last.outcome === 'clean' ? 'missed' : last.outcome,
@@ -197,16 +220,14 @@ function finishStep(state: SessionState, time: number | null): SessionState {
   // The finished measure is dealt afresh straight away: it is what comes after
   // the measure the player is entering now, so it can be read ahead.
   const count = state.measures.length
-  const dealt = generateMeasure(
-    state.config,
-    state.seed,
-    measure,
-    state.measures[(measure + count - 1) % count],
-  )
+  const before = (measure + count - 1) % count
+  const key = keyAfter(state.config, state.keys[before])
+  const dealt = generateMeasure(state.config, state.seed, measure, state.measures[before], key)
   return {
     ...next,
     seed: dealt.seed,
     measures: state.measures.map((steps, slot) => (slot === measure ? dealt.steps : steps)),
+    keys: state.keys.map((old, slot) => (slot === measure ? key : old)),
     position: { measure: (measure + 1) % count, step: 0 },
     outcomes: [],
   }

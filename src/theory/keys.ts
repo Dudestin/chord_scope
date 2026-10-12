@@ -22,3 +22,12 @@ export const KEY_OPTIONS: KeyOption[] = [
   { spec: 'F#', label: 'F# / D#m', sharps: true,  minorTonic: 'D#' },
   { spec: 'C#', label: 'C# / A#m', sharps: true,  minorTonic: 'A#' },
 ]
+
+// One spelling per pitch, in the order keys are practised round the circle.
+const FIFTHS_CYCLE = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'Db', 'Ab', 'Eb', 'Bb', 'F']
+const CYCLE_SPELLING: Record<string, string> = { Cb: 'B', Gb: 'F#', 'C#': 'Db' }
+
+export function nextKeyByFifth(spec: string): string {
+  const index = FIFTHS_CYCLE.indexOf(CYCLE_SPELLING[spec] ?? spec)
+  return FIFTHS_CYCLE[(index + 1) % FIFTHS_CYCLE.length]
+}
